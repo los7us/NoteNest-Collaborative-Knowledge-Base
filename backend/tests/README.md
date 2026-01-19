@@ -7,7 +7,7 @@ You do NOT need to be an expert to contribute here.
 
 ---
 
-## 🧪 What Is Tested?
+##  What Is Tested?
 
 Backend tests focus on:
 - API behavior
@@ -18,7 +18,7 @@ Backend tests focus on:
 
 ---
 
-## 📂 Folder Purpose
+##  Folder Purpose
 
 backend/tests/
 
@@ -30,7 +30,7 @@ This folder is used for:
 
 ---
 
-## 🌱 Beginner-Friendly Contributions
+##  Beginner-Friendly Contributions
 
 You can contribute by:
 - Writing simple test cases
@@ -45,7 +45,7 @@ Example beginner tasks:
 
 ---
 
-## 🛠️ Tools Used
+##  Tools Used
 
 - **Jest** – Test runner
 - **Supertest** – API testing utility
@@ -54,16 +54,39 @@ These tools are widely used in the industry.
 
 ---
 
-## 🚀 Running Tests (Optional)
+##  Running Tests (Optional)
 
 > ⚠️ Running tests is optional for frontend or documentation contributors.
 
 Basic command:
 ```bash
 npm test
+```
+---
 
-📌 Contribution Tips
-🌟 Final Note
+ ## Contribution Tips
+
+- Keep tests small and focused
+
+- One test = one behavior
+
+- Use clear test descriptions
+
+- Tests should be easy to understand
+
+---
+## Need Help?
+
+- If you are unsure how to write a test:
+
+- Read existing test files
+
+- Ask in the related GitHub issue
+
+- Contact OSQ mentors at: *osq@r3actr.work*
+---
+
+## Final Note
 
 Good tests improve confidence and code quality.
 Even simple tests are valuable contributions 🙌
