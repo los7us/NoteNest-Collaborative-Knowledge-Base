@@ -4,12 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useUserRole } from "@/contexts/UserRoleContext";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { type UserRole } from "@/lib/permissions";
 
 export default function Sidebar() {
   const pathname = usePathname();
   const { canAccessManagement } = usePermissions();
   const { role, setRole } = useUserRole();
+  const { activeWorkspace } = useWorkspace();
   const linkBase =
     "block rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-200";
   const linkActive = {
@@ -40,9 +42,9 @@ export default function Sidebar() {
       </div>
       <nav className="flex-1 p-3 space-y-1">
         <Link
-          href="/"
+          href={`/workspace/${activeWorkspace.id}`}
           className={`${linkBase} flex items-center gap-2`}
-          style={pathname === "/" ? linkActive : linkInactive}
+          style={pathname === `/workspace/${activeWorkspace.id}` ? linkActive : linkInactive}
         >
           <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -50,16 +52,16 @@ export default function Sidebar() {
           Home
         </Link>
         <Link
-          href="/dashboard"
+          href={`/workspace/${activeWorkspace.id}/dashboard`}
           className={linkBase}
-          style={pathname === "/dashboard" ? linkActive : linkInactive}
+          style={pathname === `/workspace/${activeWorkspace.id}/dashboard` ? linkActive : linkInactive}
         >
           Dashboard
         </Link>
         <Link
-          href="/notes"
+          href={`/workspace/${activeWorkspace.id}/notes`}
           className={linkBase}
-          style={pathname === "/notes" ? linkActive : linkInactive}
+          style={pathname === `/workspace/${activeWorkspace.id}/notes` ? linkActive : linkInactive}
         >
           Notes
         </Link>

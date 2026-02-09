@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import WorkspaceSelector from "@/components/WorkspaceSelector";
 
 interface HeaderProps {
   title?: string;
@@ -23,6 +24,7 @@ export default function Header({
         borderColor: "var(--color-border-light)",
       }}
     >
+      <WorkspaceSelector />
       <h1
         className="text-xl font-semibold shrink-0"
         style={{ color: "var(--color-text-primary)" }}

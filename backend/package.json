@@ -6,7 +6,8 @@
     "dev": "npx ts-node-dev --respawn --transpile-only src/index.ts"
   },
   "dependencies": {
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "notenest": "file:.."
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
