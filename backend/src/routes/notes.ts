@@ -16,6 +16,21 @@ router.get('/workspace/:workspaceId', async (req: Request, res: Response) => {
   }
 });
 
+// Get single note by ID
+router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const note = await Note.findById(id);
+    if (!note) {
+      return res.status(404).json({ error: 'Note not found' });
+    }
+    res.json(note);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch note' });
+  }
+});
+
+
 // Create a new note
 router.post('/', async (req: Request, res: Response) => {
   try {

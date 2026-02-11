@@ -25,6 +25,8 @@ import {
   AuditLogsResponse,
   ErrorResponse,
 } from '../../shared/types';
+// import { io } from "socket.io-client"; // Added at bottom
+
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 if (!API_BASE_URL) {
@@ -93,6 +95,10 @@ class ApiService {
     return this.request(`/api/notes/workspace/${workspaceId}`);
   }
 
+  async getNote(id: string): Promise<Note> {
+    return this.request(`/api/notes/${id}`);
+  }
+
   async createNote(data: CreateNoteRequest): Promise<Note> {
     return this.request('/api/notes', {
       method: 'POST',
@@ -146,4 +152,17 @@ class ApiService {
   }
 }
 
+
+import { io } from "socket.io-client";
+
+export const socket = io(process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001", {
+  autoConnect: false,
+  auth: (cb) => {
+    // We'll insert the token here when connecting
+    const token = localStorage.getItem('token');
+    cb({ token });
+  }
+});
+
 export const apiService = new ApiService();
+

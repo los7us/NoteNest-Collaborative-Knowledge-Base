@@ -3,6 +3,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface INote extends Document {
   title: string;
   content: string;
+  docState?: Buffer;
   workspaceId: string;
   author: string; // user ID
   tags?: string[];
@@ -13,6 +14,7 @@ export interface INote extends Document {
 const NoteSchema: Schema = new Schema({
   title: { type: String, required: true },
   content: { type: String, required: true },
+  docState: { type: Buffer }, // Y.js binary state
   workspaceId: { type: String, required: true },
   author: { type: String, required: true },
   tags: [{ type: String }],
