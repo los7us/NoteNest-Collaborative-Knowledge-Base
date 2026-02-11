@@ -6,6 +6,7 @@ import { PersistenceManager } from '../persistence';
 import { AuditService } from '../services/auditService';
 import { authenticateToken, validateAccessLink, requirePermission, AuthRequest } from '../middleware/auth';
 import { diff_match_patch } from 'diff-match-patch';
+import { getCacheService, CacheService } from '../services/cacheService';
 
 const router = express.Router();
 
@@ -13,7 +14,24 @@ const router = express.Router();
 router.get('/workspace/:workspaceId', authenticateToken, validateAccessLink, requirePermission('read'), async (req: AuthRequest, res: Response) => {
   try {
     const { workspaceId } = req.params;
+    const cacheService = getCacheService();
+    const cacheKey = CacheKeys.workspaceNotes(workspaceId);
+
+    // Try to get from cache first
+    if (cacheService) {
+      const cachedNotes = await cacheService.get(cacheKey);
+      if (cachedNotes) {
+        return res.json(cachedNotes);
+      }
+    }
+
     const notes = await Note.find({ workspaceId });
+
+    // Cache the result
+    if (cacheService) {
+      await cacheService.set(cacheKey, notes);
+    }
+
     res.json(notes);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch notes' });
@@ -86,6 +104,14 @@ router.put('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Note not found' });
     }
 
+    // Invalidate cache for this note and workspace notes
+    const cacheService = getCacheService();
+    if (cacheService) {
+      await cacheService.delete(CacheKeys.note(id));
+      await cacheService.delete(CacheKeys.workspaceNotes(note.workspaceId.toString()));
+      await cacheService.delete(CacheKeys.noteVersions(id));
+    }
+
     // Log the event
     await AuditService.logEvent(
       'note_updated',
@@ -111,6 +137,14 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
     if (!note) {
       return res.status(404).json({ error: 'Note not found' });
+    }
+
+    // Invalidate cache for this note and workspace notes
+    const cacheService = getCacheService();
+    if (cacheService) {
+      await cacheService.delete(CacheKeys.note(id));
+      await cacheService.delete(CacheKeys.workspaceNotes(note.workspaceId.toString()));
+      await cacheService.delete(CacheKeys.noteVersions(id));
     }
 
     // Log the event

@@ -2,13 +2,31 @@ import express, { Request, Response } from 'express';
 import Workspace from '../models/Workspace';
 import { AuditService } from '../services/auditService';
 import { authenticateToken, AuthRequest, requirePermission } from '../middleware/auth';
+import { getCacheService, CacheKeys } from '../services/cacheService';
 
 const router = express.Router();
 
 // Get workspaces for a user
 router.get('/user/:userId', authenticateToken, async (req: Request, res: Response) => {
   try {
+    const cacheService = getCacheService();
+    const cacheKey = CacheKeys.userWorkspaces(req.params.userId);
+
+    // Try to get from cache first
+    if (cacheService) {
+      const cachedWorkspaces = await cacheService.get(cacheKey);
+      if (cachedWorkspaces) {
+        return res.json(cachedWorkspaces);
+      }
+    }
+
     const workspaces = await Workspace.find({ $or: [{ owner: req.params.userId }, { 'members.userId': req.params.userId }] });
+
+    // Cache the result
+    if (cacheService) {
+      await cacheService.set(cacheKey, workspaces);
+    }
+
     res.json(workspaces);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch workspaces' });

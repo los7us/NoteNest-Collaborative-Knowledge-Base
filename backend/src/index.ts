@@ -10,6 +10,7 @@ import groupRoutes from './routes/groups';
 import permissionRoutes from './routes/permissions';
 import { requestLoggingMiddleware } from './middleware/logging';
 import { authenticateToken } from './middleware/auth';
+import { initializeCache, getCacheService, CacheKeys } from './services/cacheService';
 
 dotenv.config();
 
@@ -35,6 +36,13 @@ const MONGO_URI = process.env.MONGO_URI!;
 mongoose.connect(MONGO_URI)
   .then(() => console.log("📊 Connected to MongoDB"))
   .catch(err => console.error("MongoDB connection error:", err));
+
+// Initialize Redis cache
+initializeCache().then(() => {
+  console.log("🔄 Redis cache initialized");
+}).catch(err => {
+  console.warn("⚠️  Redis cache initialization failed, continuing without cache:", err.message);
+});
 
 // Routes
 app.use('/api/users', userRoutes);
@@ -113,8 +121,19 @@ app.get("/health", (_req: Request, res: Response) => {
   });
 });
 
-app.get("/notes", (_req: Request, res: Response) => {
-  res.json([
+app.get("/notes", async (_req: Request, res: Response) => {
+  const cacheService = getCacheService();
+  const cacheKey = 'sample_notes';
+
+  // Try to get from cache first
+  if (cacheService) {
+    const cachedNotes = await cacheService.get(cacheKey);
+    if (cachedNotes) {
+      return res.json(cachedNotes);
+    }
+  }
+
+  const notes = [
     {
       id: "1",
       title: "Getting Started with NoteNest",
@@ -133,7 +152,14 @@ app.get("/notes", (_req: Request, res: Response) => {
       content: "NoteNest supports Markdown formatting for rich text documentation.",
       createdAt: "2026-01-25T09:15:00.000Z",
     },
-  ]);
+  ];
+
+  // Cache the result
+  if (cacheService) {
+    await cacheService.set(cacheKey, notes);
+  }
+
+  res.json(notes);
 });
 
 const PORT = process.env.PORT || 5001;

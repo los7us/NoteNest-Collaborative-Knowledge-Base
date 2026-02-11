@@ -5,6 +5,7 @@ import Permission from '../models/Permission';
 import Group from '../models/Group';
 import AccessLink from '../models/AccessLink';
 import logger from '../utils/logger';
+import { getCacheService, CacheKeys } from '../services/cacheService';
 
 export interface AuthRequest extends Request {
   user?: any;
@@ -43,6 +44,17 @@ export const requireRole = (roles: string[]) => {
 
 // New function to resolve effective permissions for a user on a resource path
 export const resolvePermissions = async (userId: string, resourcePath: string): Promise<string[]> => {
+  const cacheService = getCacheService();
+  const cacheKey = CacheKeys.permission(userId, resourcePath);
+
+  // Try to get from cache first
+  if (cacheService) {
+    const cachedPermissions = await cacheService.get(cacheKey);
+    if (cachedPermissions) {
+      return cachedPermissions;
+    }
+  }
+
   const permissions: string[] = [];
 
   // Get direct user permissions
@@ -70,7 +82,14 @@ export const resolvePermissions = async (userId: string, resourcePath: string): 
   }
 
   // Remove duplicates
-  return [...new Set(permissions)];
+  const uniquePermissions = [...new Set(permissions)];
+
+  // Cache the result
+  if (cacheService) {
+    await cacheService.set(cacheKey, uniquePermissions, 300); // 5 minutes TTL for permissions
+  }
+
+  return uniquePermissions;
 };
 
 // Middleware to check permissions on a resource
