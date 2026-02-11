@@ -1,9 +1,9 @@
 import { Doc, encodeStateAsUpdate, applyUpdate } from 'yjs';
 import { Awareness, applyAwarenessUpdate } from 'y-protocols/awareness';
 import { Server as SocketIOServer, Socket } from 'socket.io';
-import { PersistenceManager } from '../../src/persistence';
-import Workspace from '../../src/models/Workspace';
-import Note from '../../src/models/Note';
+import { PersistenceManager } from '@backend/persistence';
+import Workspace from '@backend/models/Workspace';
+import Note from '@backend/models/Note';
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;

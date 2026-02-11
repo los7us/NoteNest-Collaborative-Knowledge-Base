@@ -1,8 +1,8 @@
 import { Server as SocketIOServer, Socket } from "socket.io";
 import jwt from 'jsonwebtoken';
-import Note from '../../src/models/Note';
-import NoteVersion from '../../src/models/NoteVersion';
-import User from '../../src/models/User';
+import Note from '@backend/models/Note';
+import NoteVersion from '@backend/models/NoteVersion';
+import User from '@backend/models/User';
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
