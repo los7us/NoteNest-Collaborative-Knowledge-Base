@@ -6,9 +6,7 @@ import NoteVersion from "./models/NoteVersion";
 import Workspace from "./models/Workspace";
 import User from "./models/User";
 import { AuditService } from "./services/auditService";
-import { getYDoc, handleYjsMessage } from "./services/yjsService";
-import * as syncProtocol from 'y-protocols/sync';
-import * as encoding from 'lib0/encoding';
+import { YjsProvider } from "./yjsProvider";
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -58,8 +56,14 @@ export default function setupSocketHandlers(io: SocketIOServer) {
       socket.join(`note-${noteId}`);
       console.log(`User ${socket.userId} joined note ${noteId}`);
 
-      // Initialize Y.js Doc
-      const doc = await getYDoc(noteId);
+    // Y.js collaboration events
+    socket.on("join-note-yjs", (data: { noteId: string; workspaceId: string }) => {
+      // Delegate to YjsProvider
+      socket.emit("yjs-ready", { noteId: data.noteId });
+    });
+
+    socket.on("leave-note", (noteId: string) => {
+      socket.leave(`note-${noteId}`);
 
       // Send initial sync step 1 to client so they can respond with their state
       const encoder = encoding.createEncoder();
@@ -68,24 +72,15 @@ export default function setupSocketHandlers(io: SocketIOServer) {
       socket.emit("yjs-sync", encoding.toUint8Array(encoder));
     });
 
-    socket.on("yjs-sync", async (data: { noteId: string, message: Uint8Array }) => {
-      // Handle Y.js sync protocol
-      // We expect `data.message` to be a Uint8Array (Buffer in Socket.io)
-      const message = new Uint8Array(data.message);
+    socket.on("update-note", async (data: { noteId: string; title: string; content: string; expectedVersion?: number }) => {
+      const { noteId, title, content, expectedVersion } = data;
 
-      await handleYjsMessage(data.noteId, message, (response) => {
-        // Send response back to sender
-        socket.emit("yjs-sync", response);
-
-        // If it was an update, broadcast to others
-        // Note: The response from handleYjsMessage is usually a response to the sender (e.g. SyncStep2)
-        // But if we received an update (SyncStep2 or Update), we need to broadcast it to others.
-        // Actually, handleYjsMessage mainly handles request/response for sync.
-        // For broadcasting updates, we need to inspect what happened or just use the doc 'update' event.
-        // Optimization: Let the doc 'update' event handle broadcast?
-        // No, standard way is: Server receives update -> Applies to Doc -> Broadcasts update message.
-      });
-    });
+      // Validate note and permissions with OCC
+      const note = await Note.findOne({ _id: noteId, workspaceId: socket.workspaceId }) as any;
+      if (!note) {
+        socket.emit("error", { message: "Note not found" });
+        return;
+      }
 
     // Custom Y.js Update Handler to Broadcast
     // The client sends binary update
@@ -108,6 +103,53 @@ export default function setupSocketHandlers(io: SocketIOServer) {
       } catch (e) {
         console.error("Error applying update", e);
       }
+
+      // OCC check
+      if (expectedVersion !== undefined && note.version !== expectedVersion) {
+        socket.emit('note-update-conflict', {
+          noteId,
+          conflict: {
+            error: 'Conflict',
+            message: 'Note has been updated by another user. Please refresh and try again.',
+            currentVersion: note.version,
+            expectedVersion,
+            serverData: {
+              title: note.title,
+              content: note.content,
+              updatedAt: note.updatedAt
+            },
+            guidance: 'Fetch the latest version, merge your changes manually, and retry the update.'
+          },
+          clientChanges: { title, content }
+        });
+        return;
+      }
+
+      // Update note with incremented version
+      note.title = title;
+      note.content = content;
+      note.version = note.version + 1;
+      note.updatedAt = new Date();
+      await note.save();
+
+      // Create version using PersistenceManager
+      const persistence = require('./persistence').PersistenceManager.getInstance();
+      await persistence.createVersion(noteId, socket.userId!, socket.workspaceId!, "Real-time edit");
+
+      // Log audit
+      await AuditService.logEvent(
+        "note_updated",
+        socket.userId!,
+        socket.workspaceId!,
+        noteId,
+        "note",
+        { title, version: note.version }
+      );
+
+      // Broadcast update to room
+      socket.to(`note-${noteId}`).emit("note-updated", { noteId, title, content, updatedBy: socket.userId });
+
+      console.log(`Note ${noteId} updated by ${socket.userId}`);
     });
 
     socket.on("disconnect", () => {
