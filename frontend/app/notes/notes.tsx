@@ -57,7 +57,7 @@ export default function NotesPage() {
 
   const createButtonRef = useRef<HTMLButtonElement>(null);
 
-  // Initial load
+  /* ---------------- Initial Load ---------------- */
   useEffect(() => {
     const stored = loadNotesFromStorage();
     const timer = setTimeout(() => {
@@ -79,7 +79,6 @@ export default function NotesPage() {
               },
             ]
       );
-      setLoadError(null);
       setIsLoading(false);
     }, 600);
 
@@ -90,6 +89,7 @@ export default function NotesPage() {
     if (!isLoading) saveNotesToStorage(notes);
   }, [notes, isLoading]);
 
+  /* ---------------- Handle ?new=1 ---------------- */
   useEffect(() => {
     if (searchParams.get("new") === "1" && canCreateNote) {
       setShowCreateModal(true);
@@ -97,18 +97,32 @@ export default function NotesPage() {
     }
   }, [searchParams, canCreateNote]);
 
+  /* ---------------- ESC: view modal ---------------- */
+  useEffect(() => {
+    if (!viewingNote) return;
+    const handleEsc = () => setViewingNote(null);
+    window.addEventListener("shortcut-esc", handleEsc);
+    return () => window.removeEventListener("shortcut-esc", handleEsc);
+  }, [viewingNote]);
+
   const handleCreateNote = useCallback(() => {
     if (!canCreateNote) return;
-    setActionError(null);
     setCreateTitle("");
     setCreateContent("");
     setCreateTitleError("");
     setShowCreateModal(true);
   }, [canCreateNote]);
 
+  const handleCloseCreateModal = useCallback(() => {
+    if (isSubmittingCreate) return;
+    setShowCreateModal(false);
+    createButtonRef.current?.focus();
+  }, [isSubmittingCreate]);
+
   const handleSubmitCreate = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
+
       const title = createTitle.trim();
       if (!title) {
         setCreateTitleError("Title is required");
@@ -119,8 +133,6 @@ export default function NotesPage() {
         return;
       }
 
-      setIsSubmittingCreate(true);
-
       const newNote: Note = {
         id: Date.now(),
         title,
@@ -129,21 +141,17 @@ export default function NotesPage() {
       };
 
       setNotes((prev) => [...prev, newNote]);
-      setCreateSuccessMessage("Note created");
       setShowCreateModal(false);
-      setCreateTitle("");
-      setCreateContent("");
-      setIsSubmittingCreate(false);
-      createButtonRef.current?.focus();
+      setCreateSuccessMessage("Note created");
+
       setTimeout(() => setCreateSuccessMessage(null), 2000);
     },
     [createTitle, createContent]
   );
 
   const handleDeleteNote = (id: number) => {
-    setActionError(null);
     if (viewingNote?.id === id) setViewingNote(null);
-    setNotes(notes.filter((note) => note.id !== id));
+    setNotes((prev) => prev.filter((n) => n.id !== id));
   };
 
   return (
@@ -155,15 +163,18 @@ export default function NotesPage() {
           title="Notes"
           showSearch
           action={
-            canCreateNote && (
+            canCreateNote ? (
               <button
                 ref={createButtonRef}
                 type="button"
                 onClick={handleCreateNote}
                 className="btn-primary"
+                aria-label="Create note"
               >
                 Create Note
               </button>
+            ) : (
+              <span title={CREATE_RESTRICTED_TITLE}>Create Note</span>
             )
           }
         />
@@ -190,38 +201,40 @@ export default function NotesPage() {
               />
             ) : (
               <ul className="space-y-3">
-                {notes.map((note, index) => (
+                {notes.map((note) => (
                   <li
                     key={note.id}
-                    className="rounded-xl border flex gap-4 p-4 bg-white shadow-sm hover:shadow-md transition"
+                    className="rounded-xl border flex gap-4 p-4 bg-white shadow-sm hover:shadow-md transition group"
                   >
                     <button
                       type="button"
                       onClick={() => setViewingNote(note)}
-                      title={note.title} // ✅ TOOLTIP FIX
-                      className="flex-1 min-w-0 text-left"
+                      className="flex-1 text-left"
                       aria-label={`View note: ${note.title}`}
                     >
-                      <h4 className="font-semibold truncate">
-                        {note.title}
-                      </h4>
-
-                      <p className="text-sm truncate text-gray-600 mt-1">
+                      <h4 className="font-semibold truncate">{note.title}</h4>
+                      <p className="text-sm truncate mt-1">
                         {note.content || "No content"}
                       </p>
-
                       <p className="text-xs mt-1 text-gray-500">
                         Updated {note.updatedAt}
                       </p>
                     </button>
 
-                    {canDeleteNote && (
+                    {canDeleteNote ? (
                       <button
-                        onClick={() => handleDeleteNote(note.id)}
-                        className="text-red-500 text-sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteNote(note.id);
+                        }}
+                        className="btn-icon text-red-500"
+                        title="Delete note"
+                        aria-label={`Delete ${note.title}`}
                       >
-                        Delete
+                        🗑
                       </button>
+                    ) : (
+                      <span title={DELETE_RESTRICTED_TITLE}>🔒</span>
                     )}
                   </li>
                 ))}
@@ -230,6 +243,38 @@ export default function NotesPage() {
           </div>
         </main>
       </div>
+
+      {/* View Note Modal */}
+      {viewingNote && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.5)" }}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="bg-white rounded-xl max-w-lg w-full p-6 relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setViewingNote(null)}
+              className="btn-icon absolute top-3 right-3"
+              title="Close"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+
+            <h2 className="text-xl font-semibold mb-4">
+              {viewingNote.title}
+            </h2>
+
+            <p className="text-sm whitespace-pre-wrap">
+              {viewingNote.content || "No content yet."}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
