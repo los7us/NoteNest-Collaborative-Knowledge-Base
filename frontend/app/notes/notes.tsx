@@ -92,6 +92,7 @@ export default function NotesPage() {
     if (!isLoading) saveNotesToStorage(notes);
   }, [notes, isLoading]);
 
+  /* ---------- Retry Load ---------- */
   const retryLoad = () => {
     setLoadError(null);
     setIsLoading(true);
@@ -125,12 +126,6 @@ export default function NotesPage() {
     setCreateTitleError("");
     setShowCreateModal(true);
   }, [canCreateNote]);
-
-  const handleCloseCreateModal = useCallback(() => {
-    if (isSubmittingCreate) return;
-    setShowCreateModal(false);
-    createButtonRef.current?.focus();
-  }, [isSubmittingCreate]);
 
   const handleSubmitCreate = useCallback(
     (e: React.FormEvent) => {
@@ -190,7 +185,10 @@ export default function NotesPage() {
           }
         />
 
-        <main className="flex-1 overflow-auto flex justify-center">
+        <main
+          className="flex-1 overflow-auto flex justify-center"
+          aria-busy={isLoading}
+        >
           <div className="max-w-3xl w-full p-6">
             {createSuccessMessage && (
               <div className="mb-4 text-green-600 font-medium">
@@ -243,6 +241,7 @@ export default function NotesPage() {
                       type="button"
                       onClick={() => setViewingNote(note)}
                       className="flex-1 text-left"
+                      aria-label={`View note: ${note.title}`}
                     >
                       <h4 className="font-semibold truncate">{note.title}</h4>
                       <p className="text-sm truncate mt-1">
@@ -258,6 +257,7 @@ export default function NotesPage() {
                           handleDeleteNote(note.id);
                         }}
                         title="Delete note"
+                        aria-label={`Delete ${note.title}`}
                       >
                         🗑
                       </button>
