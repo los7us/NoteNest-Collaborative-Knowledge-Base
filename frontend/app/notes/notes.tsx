@@ -35,8 +35,10 @@ function saveNotesToStorage(notes: Note[]) {
   }
 }
 
-const CREATE_RESTRICTED_TITLE = "You need Editor or Admin role to create notes.";
-const DELETE_RESTRICTED_TITLE = "You need Editor or Admin role to delete notes.";
+const CREATE_RESTRICTED_TITLE =
+  "You need Editor or Admin role to create notes.";
+const DELETE_RESTRICTED_TITLE =
+  "You need Editor or Admin role to delete notes.";
 
 export default function NotesPage() {
   const searchParams = useSearchParams();
@@ -52,14 +54,16 @@ export default function NotesPage() {
   const [createContent, setCreateContent] = useState("");
   const [createTitleError, setCreateTitleError] = useState("");
   const [isSubmittingCreate, setIsSubmittingCreate] = useState(false);
-  const [createSuccessMessage, setCreateSuccessMessage] = useState<string | null>(null);
-  const [viewingNote, setViewingNote] = useState<Note | null>(null);
+  const [createSuccessMessage, setCreateSuccessMessage] =
+    useState<string | null>(null);
 
+  const [viewingNote, setViewingNote] = useState<Note | null>(null);
   const createButtonRef = useRef<HTMLButtonElement>(null);
 
   /* ---------------- Initial Load ---------------- */
   useEffect(() => {
     const stored = loadNotesFromStorage();
+
     const timer = setTimeout(() => {
       setNotes(
         stored.length > 0
@@ -89,7 +93,30 @@ export default function NotesPage() {
     if (!isLoading) saveNotesToStorage(notes);
   }, [notes, isLoading]);
 
-  /* ---------------- Handle ?new=1 ---------------- */
+  /* ---------------- Retry Load ---------------- */
+  const retryLoad = () => {
+    setLoadError(null);
+    setIsLoading(true);
+
+    setTimeout(() => {
+      const stored = loadNotesFromStorage();
+      setNotes(
+        stored.length > 0
+          ? stored
+          : [
+              {
+                id: 1,
+                title: "Project Overview",
+                content: "A high-level overview of the project.",
+                updatedAt: "Just now",
+              },
+            ]
+      );
+      setIsLoading(false);
+    }, 600);
+  };
+
+  /* ---------------- ?new=1 ---------------- */
   useEffect(() => {
     if (searchParams.get("new") === "1" && canCreateNote) {
       setShowCreateModal(true);
@@ -97,14 +124,7 @@ export default function NotesPage() {
     }
   }, [searchParams, canCreateNote]);
 
-  /* ---------------- ESC: view modal ---------------- */
-  useEffect(() => {
-    if (!viewingNote) return;
-    const handleEsc = () => setViewingNote(null);
-    window.addEventListener("shortcut-esc", handleEsc);
-    return () => window.removeEventListener("shortcut-esc", handleEsc);
-  }, [viewingNote]);
-
+  /* ---------------- Create Note ---------------- */
   const handleCreateNote = useCallback(() => {
     if (!canCreateNote) return;
     setCreateTitle("");
@@ -112,6 +132,14 @@ export default function NotesPage() {
     setCreateTitleError("");
     setShowCreateModal(true);
   }, [canCreateNote]);
+
+  useEffect(() => {
+    if (!canCreateNote) return;
+    const handler = () => handleCreateNote();
+    window.addEventListener("shortcut-create-note", handler);
+    return () =>
+      window.removeEventListener("shortcut-create-note", handler);
+  }, [canCreateNote, handleCreateNote]);
 
   const handleCloseCreateModal = useCallback(() => {
     if (isSubmittingCreate) return;
@@ -129,7 +157,9 @@ export default function NotesPage() {
         return;
       }
       if (title.length > TITLE_MAX_LENGTH) {
-        setCreateTitleError(`Title must be ${TITLE_MAX_LENGTH} characters or less`);
+        setCreateTitleError(
+          `Title must be ${TITLE_MAX_LENGTH} characters or less`
+        );
         return;
       }
 
@@ -166,9 +196,8 @@ export default function NotesPage() {
             canCreateNote ? (
               <button
                 ref={createButtonRef}
-                type="button"
-                onClick={handleCreateNote}
                 className="btn-primary"
+                onClick={handleCreateNote}
                 aria-label="Create note"
               >
                 Create Note
@@ -181,6 +210,25 @@ export default function NotesPage() {
 
         <main className="flex-1 overflow-auto flex justify-center">
           <div className="max-w-3xl w-full p-6">
+            {createSuccessMessage && (
+              <div className="mb-4 text-green-600 font-medium">
+                {createSuccessMessage}
+              </div>
+            )}
+
+            {loadError && (
+              <ErrorState
+                title="Couldn't load notes"
+                message={loadError}
+                variant="error"
+                action={
+                  <button className="btn-primary" onClick={retryLoad}>
+                    Try again
+                  </button>
+                }
+              />
+            )}
+
             {isLoading ? (
               <SkeletonList count={4} />
             ) : notes.length === 0 ? (
@@ -193,7 +241,10 @@ export default function NotesPage() {
                 }
                 action={
                   canCreateNote && (
-                    <button className="btn-primary" onClick={handleCreateNote}>
+                    <button
+                      className="btn-primary"
+                      onClick={handleCreateNote}
+                    >
                       Create your first note
                     </button>
                   )
@@ -204,7 +255,7 @@ export default function NotesPage() {
                 {notes.map((note) => (
                   <li
                     key={note.id}
-                    className="rounded-xl border flex gap-4 p-4 bg-white shadow-sm hover:shadow-md transition group"
+                    className="rounded-xl border flex gap-4 p-4 bg-white shadow-sm group"
                   >
                     <button
                       type="button"
@@ -212,7 +263,9 @@ export default function NotesPage() {
                       className="flex-1 text-left"
                       aria-label={`View note: ${note.title}`}
                     >
-                      <h4 className="font-semibold truncate">{note.title}</h4>
+                      <h4 className="font-semibold truncate">
+                        {note.title}
+                      </h4>
                       <p className="text-sm truncate mt-1">
                         {note.content || "No content"}
                       </p>
@@ -223,12 +276,11 @@ export default function NotesPage() {
 
                     {canDeleteNote ? (
                       <button
+                        className="btn-icon text-red-500"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleDeleteNote(note.id);
                         }}
-                        className="btn-icon text-red-500"
-                        title="Delete note"
                         aria-label={`Delete ${note.title}`}
                       >
                         🗑
@@ -243,38 +295,6 @@ export default function NotesPage() {
           </div>
         </main>
       </div>
-
-      {/* View Note Modal */}
-      {viewingNote && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: "rgba(0,0,0,0.5)" }}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="bg-white rounded-xl max-w-lg w-full p-6 relative"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() => setViewingNote(null)}
-              className="btn-icon absolute top-3 right-3"
-              title="Close"
-              aria-label="Close"
-            >
-              ✕
-            </button>
-
-            <h2 className="text-xl font-semibold mb-4">
-              {viewingNote.title}
-            </h2>
-
-            <p className="text-sm whitespace-pre-wrap">
-              {viewingNote.content || "No content yet."}
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
