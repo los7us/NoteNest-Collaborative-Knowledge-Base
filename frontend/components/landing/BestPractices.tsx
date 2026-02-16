@@ -95,7 +95,7 @@ const BestPractices = () => {
       className="overflow-hidden"
       // Section: translateY(27px), minHeight: 650px
       style={{
-        transform: 'translateY(27px)',
+        marginTop: '27px',
         minHeight: '650px'
       }}
     >
