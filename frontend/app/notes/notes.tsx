@@ -16,6 +16,7 @@ interface Note {
   id: number;
   title: string;
   content?: string;
+  createdAt: number;
 }
 
 function loadNotesFromStorage(): Note[] {
@@ -33,6 +34,17 @@ function saveNotesToStorage(notes: Note[]) {
   if (typeof window !== "undefined") {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
   }
+}
+
+function formatRelativeTime(timestamp: number) {
+  const diff = Date.now() - timestamp;
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(minutes / 60);
+
+  if (minutes < 1) return "Created just now";
+  if (minutes < 60)
+    return `Created ${minutes} minute${minutes > 1 ? "s" : ""} ago`;
+  return `Created ${hours} hour${hours > 1 ? "s" : ""} ago`;
 }
 
 export default function NotesPage() {
@@ -82,11 +94,13 @@ export default function NotesPage() {
                 id: 1,
                 title: "Project Overview",
                 content: "A high-level overview of the project.",
+                createdAt: Date.now() - 1000 * 60 * 60, // 1 hour ago
               },
               {
                 id: 2,
                 title: "Meeting Notes",
                 content: "Key points from the last team sync.",
+                createdAt: Date.now() - 1000 * 60 * 5, // 5 minutes ago
               },
             ]
       );
@@ -152,7 +166,9 @@ export default function NotesPage() {
           id: Date.now(),
           title,
           content: createContent.trim() || undefined,
+          createdAt: Date.now(),
         };
+
         setNotes((prev) => [...prev, newNote]);
       }
 
@@ -248,6 +264,11 @@ export default function NotesPage() {
                   >
                     <div>
                       <h4 className="font-semibold">{note.title}</h4>
+
+                      <p className="text-xs text-gray-500 mt-1">
+                        {formatRelativeTime(note.createdAt)}
+                      </p>
+
                       <p className="text-sm text-gray-600 mt-1">
                         {note.content || "No content"}
                       </p>
