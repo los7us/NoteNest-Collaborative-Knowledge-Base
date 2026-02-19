@@ -147,8 +147,28 @@ export default function DashboardPage() {
                 }}
               >
                 <div style={{ padding: 20, borderBottom: "1px solid #222" }}>
-                  <h3 style={{ color: "#fff" }}>
-                    Recent Notes ({recentNotes.length})
+                  <h3
+                    style={{
+                      color: "#e5e7eb",
+                      fontWeight: 600,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    Recent Notes
+                    <span
+                      style={{
+                        background: "rgba(167, 139, 250, 0.15)",
+                        color: "#a78bfa",
+                        padding: "2px 8px",
+                        borderRadius: 999,
+                        fontSize: 12,
+                        fontWeight: 500,
+                      }}
+                    >
+                      {recentNotes.length}
+                    </span>
                   </h3>
                 </div>
 
