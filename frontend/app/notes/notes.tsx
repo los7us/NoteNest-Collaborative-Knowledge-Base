@@ -52,23 +52,23 @@ export default function NotesPage() {
 
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [noteToDelete, setNoteToDelete] = useState<Note | null>(null);
 
   const createButtonRef = useRef<HTMLButtonElement>(null);
 
-  /* ---------- ESC to close modal ---------- */
+  /* ---------- ESC to close modals ---------- */
   useEffect(() => {
-    if (!showCreateModal) return;
-
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setShowCreateModal(false);
+        setNoteToDelete(null);
         createButtonRef.current?.focus();
       }
     };
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [showCreateModal]);
+  }, []);
 
   /* ---------- Initial Load ---------- */
   useEffect(() => {
@@ -140,7 +140,6 @@ export default function NotesPage() {
       setIsSubmitting(true);
 
       if (editingNoteId !== null) {
-        // Edit existing note
         setNotes((prev) =>
           prev.map((note) =>
             note.id === editingNoteId
@@ -149,7 +148,6 @@ export default function NotesPage() {
           )
         );
       } else {
-        // Create new note
         const newNote: Note = {
           id: Date.now(),
           title,
@@ -268,16 +266,7 @@ export default function NotesPage() {
 
                         <button
                           type="button"
-                          onClick={() => {
-                            const confirmed = window.confirm(
-                              "Are you sure you want to delete this note? This action cannot be undone."
-                            );
-                            if (confirmed) {
-                              setNotes((prev) =>
-                                prev.filter((n) => n.id !== note.id)
-                              );
-                            }
-                          }}
+                          onClick={() => setNoteToDelete(note)}
                           aria-label="Delete note"
                           className="text-red-600 hover:text-red-700"
                         >
@@ -373,6 +362,54 @@ export default function NotesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {noteToDelete && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-note-title"
+          className="fixed inset-0 bg-black/50 flex items-center justify-center"
+        >
+          <div className="bg-white p-6 rounded w-full max-w-sm">
+            <h2
+              id="delete-note-title"
+              className="text-lg font-semibold mb-3"
+            >
+              Delete note
+            </h2>
+
+            <p className="text-sm text-gray-700 mb-6">
+              Are you sure you want to delete this note?
+              <br />
+              <strong>This action cannot be undone.</strong>
+            </p>
+
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setNoteToDelete(null)}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setNotes((prev) =>
+                    prev.filter((n) => n.id !== noteToDelete.id)
+                  );
+                  setNoteToDelete(null);
+                }}
+                className="btn-danger"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
