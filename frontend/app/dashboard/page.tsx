@@ -10,7 +10,7 @@ import RouteGuard from "@/components/RouteGuard";
 const CREATE_RESTRICTED_TITLE =
   "You need Editor or Admin role to create notes.";
 
-/* ✅ NEW — Time Ago Formatter */
+/* ✅ Time Ago Formatter */
 function getTimeAgo(dateString: string) {
   const now = new Date();
   const date = new Date(dateString);
@@ -33,25 +33,24 @@ function getTimeAgo(dateString: string) {
 export default function DashboardPage() {
   const { canCreateNote } = usePermissions();
 
-  /* ✅ UPDATED — Use timestamps instead of text */
   const [recentNotes] = useState([
     {
       id: 1,
       title: "Project Plan",
       workspace: "Team",
-      createdAt: new Date().toISOString(), // Just now
+      createdAt: new Date().toISOString(),
     },
     {
       id: 2,
       title: "Meeting Notes",
       workspace: "Personal",
-      createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hr ago
+      createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
     },
     {
       id: 3,
       title: "Design Ideas",
       workspace: "Product",
-      createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
+      createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
     },
   ]);
 
@@ -63,7 +62,7 @@ export default function DashboardPage() {
   const cardStyle = {
     background: "#0b0b0b",
     border: "1px solid #1f1f1f",
-    boxShadow: "0 10px 40px rgba(0,0,0,0.9)",
+    boxShadow: "0 10px 40px rgba(0, 0, 0, 0.9)",
   };
 
   return (
@@ -77,10 +76,9 @@ export default function DashboardPage() {
           <main style={{ background: "#000", minHeight: "100vh", padding: 32 }}>
             <div style={{ maxWidth: 900, margin: "0 auto" }}>
 
-              {/* ✅ Welcome Section */}
+              {/* Welcome Section */}
               <section
-                className={sectionCardClass}
-                style={{ ...cardStyle, padding: "24px" }}
+                style={{ ...cardStyle, padding: "24px", borderRadius: 16 }}
               >
                 <h2
                   className="text-xl font-semibold mb-2"
@@ -93,20 +91,15 @@ export default function DashboardPage() {
                   className="text-sm mb-3"
                   style={{ color: "var(--color-text-secondary)" }}
                 >
-                  This is your NoteNest dashboard. Get started by creating your first note
-                  and organizing your team's knowledge.
-                </p>
-
-                <p
-                  className="text-xs"
-                  style={{ color: "var(--color-text-muted)" }}
-                >
-                  Last updated: {lastUpdated}
+                  This is your NoteNest dashboard. Get started by creating your
+                  first note and organizing your team's knowledge.
                 </p>
               </section>
 
               {/* Quick Actions */}
-              <section style={{ ...cardStyle, borderRadius: 16 }}>
+              <section
+                style={{ ...cardStyle, borderRadius: 16, marginTop: 24 }}
+              >
                 <div style={{ padding: 20, borderBottom: "1px solid #222" }}>
                   <h3 style={{ color: "#fff" }}>Quick Actions</h3>
                 </div>
@@ -148,6 +141,13 @@ export default function DashboardPage() {
                   {recentNotes.map((note) => (
                     <div
                       key={note.id}
+                      className="
+                        transition-all duration-200 ease-in-out
+                        hover:scale-[1.02]
+                        hover:shadow-lg
+                        hover:border-gray-500/40
+                        cursor-pointer
+                      "
                       style={{
                         padding: 16,
                         border: "1px solid #222",
@@ -160,11 +160,21 @@ export default function DashboardPage() {
                         {note.title}
                       </div>
 
-                      <div style={{ color: "#aaa", fontSize: 13 }}>
+                      {/* Colored Workspace Text */}
+                      <div
+                        className={`text-sm font-medium ${
+                          note.workspace === "Team"
+                            ? "text-purple-400"
+                            : note.workspace === "Personal"
+                            ? "text-blue-400"
+                            : note.workspace === "Product"
+                            ? "text-green-400"
+                            : "text-gray-400"
+                        }`}
+                      >
                         {note.workspace}
                       </div>
 
-                      {/* ✅ NEW — Dynamic Time */}
                       <div style={{ color: "#666", fontSize: 12 }}>
                         {getTimeAgo(note.createdAt)}
                       </div>
