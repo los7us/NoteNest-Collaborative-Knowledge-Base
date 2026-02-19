@@ -52,6 +52,21 @@ export default function NotesPage() {
 
   const createButtonRef = useRef<HTMLButtonElement>(null);
 
+  useEffect(() => {
+  if (!showCreateModal) return;
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      setShowCreateModal(false);
+      createButtonRef.current?.focus();
+    }
+  };
+
+  document.addEventListener("keydown", handleKeyDown);
+  return () => document.removeEventListener("keydown", handleKeyDown);
+}, [showCreateModal]);
+
+
   /* ---------- Initial Load ---------- */
   useEffect(() => {
     const stored = loadNotesFromStorage();
@@ -210,22 +225,33 @@ export default function NotesPage() {
 <div
   role="dialog"
   aria-modal="true"
+  aria-labelledby="new-note-title"
   className="fixed inset-0 bg-black/50 flex items-center justify-center"
 >
+
           <div className="bg-white p-6 rounded w-full max-w-md">
-            <h2 className="text-xl font-semibold mb-4">New note</h2>
+<h2
+  id="new-note-title"
+  className="text-xl font-semibold mb-4"
+>
+  New note
+</h2>
 
             <form onSubmit={handleSubmitCreate} noValidate>
               <input
-                type="text"
-                value={createTitle}
-                onChange={(e) => {
-                  setCreateTitle(e.target.value);
-                  setCreateTitleError("");
-                }}
-                className="w-full border p-2 mb-2"
-                placeholder="Title"
-              />
+  type="text"
+  autoFocus
+  value={createTitle}
+  onChange={(e) => {
+    setCreateTitle(e.target.value);
+    setCreateTitleError("");
+  }}
+  className="w-full border p-2 mb-2"
+  placeholder="Title"
+/>
+
+              
+
 
               {createTitleError && (
                 <p className="text-sm text-red-600 mb-2">
@@ -243,7 +269,10 @@ export default function NotesPage() {
               <div className="flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setShowCreateModal(false)}
+onClick={() => {
+  setShowCreateModal(false);
+  createButtonRef.current?.focus();
+}}
                   className="btn-secondary"
                 >
                   Cancel
