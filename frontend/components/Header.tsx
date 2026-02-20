@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import WorkspaceSelector from "@/components/WorkspaceSelector";
+import { useRouter, useSearchParams } from "next/navigation";import WorkspaceSelector from "@/components/WorkspaceSelector";
 import { useUserRole } from "@/contexts/UserRoleContext";
 import Button from "@/components/Button";
 
@@ -19,6 +19,9 @@ export default function Header({
   action,
 }: HeaderProps) {
   const { isAuthenticated, logout } = useUserRole();
+  const router = useRouter();
+const searchParams = useSearchParams();
+const search = searchParams.get("search") || "";
 
   return (
     <>
@@ -51,21 +54,33 @@ export default function Header({
             <label htmlFor="search-input" className="sr-only">
               Search notes
             </label>
-            <input
-              id="search-input"
-              type="search"
-              data-shortcut="search"
-              placeholder="Search notes…"
-              aria-label="Search notes"
-className="w-full rounded-lg border px-3 py-2 text-sm transition-colors placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          <input
+  id="search-input"
+  type="search"
+  data-shortcut="search"
+  placeholder="Search notes…"
+  aria-label="Search notes"
+  value={search}
+  onChange={(e) => {
+    const value = e.target.value;
+    const params = new URLSearchParams(searchParams.toString());
 
-              style={{
-                borderColor: "var(--color-border-light)",
-                color: "var(--color-text-primary)",
-                background: "var(--color-background)",
-                fontSize: "var(--font-size-sm)",
-              }}
-            />
+    if (value) {
+      params.set("search", value);
+    } else {
+      params.delete("search");
+    }
+
+    router.replace(`?${params.toString()}`);
+  }}
+  className="w-full rounded-lg border px-3 py-2 text-sm transition-colors placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+  style={{
+    borderColor: "var(--color-border-light)",
+    color: "var(--color-text-primary)",
+    background: "var(--color-background)",
+    fontSize: "var(--font-size-sm)",
+  }}
+/>
           </div>
         )}
         <nav className="shrink-0 ml-auto flex items-center gap-3" aria-label="User actions">

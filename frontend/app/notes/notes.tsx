@@ -49,11 +49,13 @@ function formatRelativeTime(timestamp: number) {
 
 export default function NotesPage() {
   const searchParams = useSearchParams();
+  const search = searchParams.get("search") || "";
   const { canCreateNote, isViewer } = usePermissions();
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createTitle, setCreateTitle] = useState("");
@@ -94,13 +96,13 @@ export default function NotesPage() {
                 id: 1,
                 title: "Project Overview",
                 content: "A high-level overview of the project.",
-                createdAt: Date.now() - 1000 * 60 * 60, // 1 hour ago
+                createdAt: Date.now() - 1000 * 60 * 60,
               },
               {
                 id: 2,
                 title: "Meeting Notes",
                 content: "Key points from the last team sync.",
-                createdAt: Date.now() - 1000 * 60 * 5, // 5 minutes ago
+                createdAt: Date.now() - 1000 * 60 * 5,
               },
             ]
       );
@@ -110,9 +112,26 @@ export default function NotesPage() {
     return () => clearTimeout(timer);
   }, []);
 
+  /* ---------- Sync URL search ---------- */
+  useEffect(() => {
+    setSearchQuery(search);
+  }, [search]);
+
+  /* ---------- Persist notes ---------- */
   useEffect(() => {
     if (!isLoading) saveNotesToStorage(notes);
   }, [notes, isLoading]);
+
+  /* ---------- Filtered notes ---------- */
+  const filteredNotes = notes.filter((note) => {
+    if (!searchQuery.trim()) return true;
+
+    const query = searchQuery.toLowerCase();
+    return (
+      note.title.toLowerCase().includes(query) ||
+      note.content?.toLowerCase().includes(query)
+    );
+  });
 
   /* ---------- Create Note ---------- */
   const handleCreateNote = useCallback(() => {
@@ -133,7 +152,7 @@ export default function NotesPage() {
     setShowCreateModal(true);
   }, []);
 
-  /* ---------- Submit (Create / Edit) ---------- */
+  /* ---------- Submit ---------- */
   const handleSubmitCreate = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
@@ -162,14 +181,15 @@ export default function NotesPage() {
           )
         );
       } else {
-        const newNote: Note = {
-          id: Date.now(),
-          title,
-          content: createContent.trim() || undefined,
-          createdAt: Date.now(),
-        };
-
-        setNotes((prev) => [...prev, newNote]);
+        setNotes((prev) => [
+          ...prev,
+          {
+            id: Date.now(),
+            title,
+            content: createContent.trim() || undefined,
+            createdAt: Date.now(),
+          },
+        ]);
       }
 
       setCreateSuccessMessage(
@@ -255,20 +275,23 @@ export default function NotesPage() {
                   )
                 }
               />
+            ) : filteredNotes.length === 0 ? (
+              <EmptyState
+                title="No results found"
+                description="Try adjusting your search keywords."
+              />
             ) : (
               <ul className="space-y-3">
-                {notes.map((note) => (
+                {filteredNotes.map((note) => (
                   <li
                     key={note.id}
                     className="rounded-xl border p-4 bg-white shadow-sm flex justify-between gap-4"
                   >
                     <div>
                       <h4 className="font-semibold">{note.title}</h4>
-
                       <p className="text-xs text-gray-500 mt-1">
                         {formatRelativeTime(note.createdAt)}
                       </p>
-
                       <p className="text-sm text-gray-600 mt-1">
                         {note.content || "No content"}
                       </p>
@@ -302,138 +325,6 @@ export default function NotesPage() {
           </div>
         </main>
       </div>
-
-      {/* Create / Edit Modal */}
-      {showCreateModal && canCreateNote && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="new-note-title"
-          className="fixed inset-0 bg-black/50 flex items-center justify-center"
-        >
-          <div className="relative bg-white p-6 rounded w-full max-w-md">
-            <button
-              type="button"
-              onClick={() => {
-                setShowCreateModal(false);
-                createButtonRef.current?.focus();
-              }}
-              aria-label="Close dialog"
-              className="absolute top-3 right-3 text-gray-500 hover:text-gray-700"
-            >
-              ✕
-            </button>
-
-            <h2 id="new-note-title" className="text-xl font-semibold mb-4">
-              {editingNoteId !== null ? "Edit note" : "New note"}
-            </h2>
-
-            <form onSubmit={handleSubmitCreate} noValidate>
-              <input
-                type="text"
-                autoFocus
-                value={createTitle}
-                onChange={(e) => {
-                  setCreateTitle(e.target.value);
-                  setCreateTitleError("");
-                }}
-                className="w-full border p-2 mb-2"
-                placeholder="Title"
-              />
-
-              <p className="text-xs text-gray-500 mb-2">
-                Max {TITLE_MAX_LENGTH} characters
-              </p>
-
-              {createTitleError && (
-                <p className="text-sm text-red-600 mb-2">
-                  {createTitleError}
-                </p>
-              )}
-
-              <textarea
-                value={createContent}
-                onChange={(e) => setCreateContent(e.target.value)}
-                className="w-full border p-2 mb-4"
-                placeholder="Content (optional)"
-              />
-
-              <div className="flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCreateModal(false);
-                    createButtonRef.current?.focus();
-                  }}
-                  className="btn-secondary"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  className="btn-primary"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting
-                    ? "Saving..."
-                    : editingNoteId !== null
-                    ? "Update note"
-                    : "Create note"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {noteToDelete && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="delete-note-title"
-          className="fixed inset-0 bg-black/50 flex items-center justify-center"
-        >
-          <div className="bg-white p-6 rounded w-full max-w-sm">
-            <h2
-              id="delete-note-title"
-              className="text-lg font-semibold mb-3"
-            >
-              Delete note
-            </h2>
-
-            <p className="text-sm text-gray-700 mb-6">
-              Are you sure you want to delete this note?
-              <br />
-              <strong>This action cannot be undone.</strong>
-            </p>
-
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setNoteToDelete(null)}
-                className="btn-secondary"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setNotes((prev) =>
-                    prev.filter((n) => n.id !== noteToDelete.id)
-                  );
-                  setNoteToDelete(null);
-                }}
-                className="btn-danger"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
