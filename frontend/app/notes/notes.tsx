@@ -23,8 +23,7 @@ function loadNotesFromStorage(): Note[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw);
+    return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
@@ -37,25 +36,17 @@ function saveNotesToStorage(notes: Note[]) {
 }
 
 function formatRelativeTime(timestamp?: number) {
-  if (!timestamp || Number.isNaN(timestamp)) {
-    return "Created recently";
-  }
+  if (!timestamp) return "Created recently";
 
   const diff = Date.now() - timestamp;
-
-  if (Number.isNaN(diff) || diff < 0) {
-    return "Created recently";
-  }
-
   const minutes = Math.floor(diff / 60000);
   const hours = Math.floor(minutes / 60);
 
   if (minutes < 1) return "Created just now";
-  if (minutes < 60)
-    return `Created ${minutes} minute${minutes > 1 ? "s" : ""} ago`;
-
-  return `Created ${hours} hour${hours > 1 ? "s" : ""} ago`;
+  if (minutes < 60) return `Created ${minutes} minutes ago`;
+  return `Created ${hours} hours ago`;
 }
+
 export default function NotesPage() {
   const searchParams = useSearchParams();
   const search = searchParams.get("search") || "";
@@ -65,269 +56,185 @@ export default function NotesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "az">("newest");
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createTitle, setCreateTitle] = useState("");
   const [createContent, setCreateContent] = useState("");
   const [createTitleError, setCreateTitleError] = useState("");
-  const [createSuccessMessage, setCreateSuccessMessage] =
-    useState<string | null>(null);
-
-  const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [noteToDelete, setNoteToDelete] = useState<Note | null>(null);
 
   const createButtonRef = useRef<HTMLButtonElement>(null);
 
-  /* ---------- ESC to close modals ---------- */
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setShowCreateModal(false);
-        setNoteToDelete(null);
-        createButtonRef.current?.focus();
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  /* ---------- Initial Load ---------- */
+  /* ---------- Initial load ---------- */
   useEffect(() => {
     const stored = loadNotesFromStorage();
-    const timer = setTimeout(() => {
-      setNotes(
-        stored.length > 0
-          ? stored
-          : [
-            {
-              id: 1,
-              title: "Project Overview",
-              content: "A high-level overview of the project.",
-              createdAt: Date.now() - 1000 * 60 * 60, // 1 hour ago
-            },
-            {
-              id: 2,
-              title: "Meeting Notes",
-              content: "Key points from the last team sync.",
-              createdAt: Date.now() - 1000 * 60 * 5, // 5 minutes ago
-            },
-          ]
-      );
+    setTimeout(() => {
+      setNotes(stored);
       setIsLoading(false);
-    }, 600);
-
-    return () => clearTimeout(timer);
+    }, 500);
   }, []);
 
-  /* ---------- Sync URL search ---------- */
+  /* ---------- Sync search ---------- */
   useEffect(() => {
     setSearchQuery(search);
   }, [search]);
 
-  /* ---------- Persist notes ---------- */
+  /* ---------- Persist ---------- */
   useEffect(() => {
     if (!isLoading) saveNotesToStorage(notes);
   }, [notes, isLoading]);
 
-  /* ---------- Filtered notes ---------- */
+  /* ---------- Filter ---------- */
   const filteredNotes = notes.filter((note) => {
     if (!searchQuery.trim()) return true;
-    const query = searchQuery.toLowerCase();
+    const q = searchQuery.toLowerCase();
     return (
-      note.title.toLowerCase().includes(query) ||
-      note.content?.toLowerCase().includes(query)
+      note.title.toLowerCase().includes(q) ||
+      note.content?.toLowerCase().includes(q)
     );
   });
 
-  /* ---------- Create Note ---------- */
-  const handleCreateNote = useCallback(() => {
+  /* ---------- Sort (FIXED) ---------- */
+  const sortedNotes = [...filteredNotes].sort((a, b) => {
+    const aTime = a.createdAt ?? a.id;
+    const bTime = b.createdAt ?? b.id;
+
+    if (sortBy === "newest") {
+      if (bTime !== aTime) return bTime - aTime;
+      return b.id - a.id;
+    }
+
+    if (sortBy === "oldest") {
+      if (aTime !== bTime) return aTime - bTime;
+      return a.id - b.id;
+    }
+
+    return a.title.localeCompare(b.title);
+  });
+
+  /* ---------- Create ---------- */
+  const handleCreateNote = () => {
     if (!canCreateNote) return;
     setEditingNoteId(null);
     setCreateTitle("");
     setCreateContent("");
     setCreateTitleError("");
     setShowCreateModal(true);
-  }, [canCreateNote]);
+  };
 
-  /* ---------- Edit Note ---------- */
-  const handleEditNote = useCallback((note: Note) => {
+  /* ---------- Edit ---------- */
+  const handleEditNote = (note: Note) => {
     setEditingNoteId(note.id);
     setCreateTitle(note.title);
     setCreateContent(note.content || "");
-    setCreateTitleError("");
     setShowCreateModal(true);
-  }, []);
+  };
 
   /* ---------- Submit ---------- */
-  const handleSubmitCreate = useCallback(
-    (e: React.FormEvent) => {
-      e.preventDefault();
+  const handleSubmitCreate = (e: React.FormEvent) => {
+    e.preventDefault();
 
-      const title = createTitle.trim();
-      if (!title) {
-        setCreateTitleError("Title is required");
-        return;
-      }
+    const title = createTitle.trim();
+    if (!title) {
+      setCreateTitleError("Title is required");
+      return;
+    }
 
-      if (title.length > TITLE_MAX_LENGTH) {
-        setCreateTitleError(
-          `Title must be ${TITLE_MAX_LENGTH} characters or less`
-        );
-        return;
-      }
+    setIsSubmitting(true);
 
-      setIsSubmitting(true);
-
-      if (editingNoteId !== null) {
-        setNotes((prev) =>
-          prev.map((note) =>
-            note.id === editingNoteId
-              ? { ...note, title, content: createContent.trim() || undefined }
-              : note
+    setNotes((prev) =>
+      editingNoteId
+        ? prev.map((n) =>
+            n.id === editingNoteId
+              ? { ...n, title, content: createContent }
+              : n
           )
-        );
-      } else {
-        const newNote: Note = {
-          id: Date.now(),
-          title,
-          content: createContent.trim() || undefined,
-          createdAt: Date.now(),
-        };
-        setNotes((prev) => [...prev, newNote]);
-      }
+        : [
+            ...prev,
+            {
+              id: Date.now(),
+              title,
+              content: createContent || undefined,
+              createdAt: Date.now(),
+            },
+          ]
+    );
 
-      setCreateSuccessMessage(
-        editingNoteId !== null
-          ? "Note updated successfully."
-          : "Note created successfully."
-      );
-
-      setShowCreateModal(false);
-      setEditingNoteId(null);
-      setCreateTitle("");
-      setCreateContent("");
-
-      setTimeout(() => {
-        setCreateSuccessMessage(null);
-        setIsSubmitting(false);
-      }, 2000);
-    },
-    [createTitle, createContent, editingNoteId]
-  );
+    setShowCreateModal(false);
+    setEditingNoteId(null);
+    setIsSubmitting(false);
+  };
 
   return (
-    <div className="flex min-h-screen bg-[#F3F0E6]">
+    <div className="flex min-h-screen bg-[#0b0b0b]">
       <Sidebar />
 
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col">
         <Header
           title="Notes"
           showSearch
           action={
-            canCreateNote ? (
+            canCreateNote && (
               <button
                 ref={createButtonRef}
-                type="button"
                 onClick={handleCreateNote}
-                className="bg-[#18181b] hover:bg-[#27272a] text-white px-5 py-2.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2"
+                className="px-5 py-2.5 rounded-lg bg-blue-600 text-white font-semibold shadow hover:bg-blue-700 transition"
               >
-                <span className="material-icons-outlined text-sm">add</span> Create Note
+                + Create Note
               </button>
-            ) : null
+            )
           }
         />
 
-        <main
-          className="flex-1 overflow-y-auto"
-          aria-busy={isLoading}
-        >
-          <div className="max-w-4xl mx-auto p-4 sm:p-8">
-            {createSuccessMessage && (
-              <div
-                role="status"
-                aria-live="polite"
-                className="mb-4 text-green-600 font-medium"
+        <main className="flex-1 overflow-y-auto">
+          <div className="max-w-3xl mx-auto p-6">
+            {/* Sort */}
+            <div className="mb-4 flex justify-end items-center gap-2">
+              <span className="text-sm text-gray-400">Sort by</span>
+              <select
+                value={sortBy}
+                onChange={(e) =>
+                  setSortBy(e.target.value as "newest" | "oldest" | "az")
+                }
+                className="bg-white text-black border rounded-lg px-3 py-2 text-sm shadow"
               >
-                {createSuccessMessage}
-              </div>
-            )}
-
-            {loadError && (
-              <ErrorState
-                title="Unable to load notes. Please try again."
-                message={loadError}
-                variant="error"
-              />
-            )}
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="az">A–Z</option>
+              </select>
+            </div>
 
             {isLoading ? (
               <SkeletonList count={4} />
-            ) : notes.length === 0 ? (
-              <EmptyState
-                title="No notes yet"
-                description={
-                  isViewer
-                    ? "You don’t have permission to create notes, but you can view existing ones."
-                    : "You don’t have any notes yet. Create your first note to get started."
-                }
-                action={
-                  canCreateNote && (
-                    <button
-                      type="button"
-                      onClick={handleCreateNote}
-                      className="bg-[#18181b] hover:bg-[#27272a] text-white px-5 py-2.5 rounded-full text-sm font-medium transition-colors inline-flex items-center gap-2"
-                    >
-                      Create your first note
-                    </button>
-                  )
-                }
-              />
-            ) : filteredNotes.length === 0 ? (
+            ) : sortedNotes.length === 0 ? (
               <EmptyState
                 title="No results found"
-                description="Try adjusting your search keywords."
+                description="Try adjusting your search."
               />
             ) : (
-              <ul className="space-y-4 pt-6">
-                {filteredNotes.map((note) => (
+              <ul className="space-y-4">
+                {sortedNotes.map((note) => (
                   <li
                     key={note.id}
-                    className="rounded-3xl border border-stone-200 p-6 bg-white shadow-sm flex flex-col md:flex-row justify-between gap-4 hover:shadow-md transition-shadow group"
+                    className="bg-white rounded-xl p-5 shadow flex justify-between gap-4"
                   >
                     <div>
-                      <h4 className="font-display text-2xl font-bold text-stone-900 group-hover:text-blue-600 transition-colors">{note.title}</h4>
-                      <p className="text-sm text-stone-500 mt-1 flex items-center gap-1">
-                        <span className="material-icons-outlined text-[14px]">schedule</span>
+                      <h4 className="font-semibold text-lg">{note.title}</h4>
+                      <p className="text-sm text-gray-500">
                         {formatRelativeTime(note.createdAt)}
                       </p>
-                      <p className="text-base text-stone-600 mt-3 line-clamp-2">
+                      <p className="text-gray-700 mt-2">
                         {note.content || "No content"}
                       </p>
                     </div>
 
                     {!isViewer && (
-                      <div className="flex gap-2 items-start shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => handleEditNote(note)}
-                          aria-label="Edit note"
-                          title="Edit note"
-                          className="w-10 h-10 rounded-full flex items-center justify-center text-stone-400 hover:bg-stone-100 hover:text-stone-900 transition-colors"
-                        >
-                          <span className="material-icons-outlined text-sm">edit</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setNoteToDelete(note)}
-                          aria-label="Delete note"
-                          title="Delete note"
-                          className="w-10 h-10 rounded-full flex items-center justify-center text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
-                        >
-                          <span className="material-icons-outlined text-sm">delete</span>
-                        </button>
+                      <div className="flex gap-2">
+                        <button onClick={() => handleEditNote(note)}>✏️</button>
+                        <button onClick={() => setNoteToDelete(note)}>🗑️</button>
                       </div>
                     )}
                   </li>
@@ -338,50 +245,24 @@ export default function NotesPage() {
         </main>
       </div>
 
-      {/* Create / Edit Modal */}
-      {showCreateModal && canCreateNote && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="new-note-title"
-          className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-        >
-          <div className="relative bg-white p-8 rounded-3xl w-full max-w-lg shadow-2xl border border-stone-200">
-            <button
-              type="button"
-              onClick={() => {
-                setShowCreateModal(false);
-                createButtonRef.current?.focus();
-              }}
-              aria-label="Close dialog"
-              className="absolute top-6 right-6 text-stone-400 hover:text-stone-900 transition-colors bg-stone-100 rounded-full w-8 h-8 flex items-center justify-center"
-            >
-              <span className="material-icons-outlined text-sm">close</span>
-            </button>
-
-            <h2 id="new-note-title" className="font-display text-3xl font-bold mb-6 text-stone-900">
-              {editingNoteId !== null ? "Edit note" : "New note"}
+      {/* Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-4">
+              {editingNoteId ? "Edit note" : "New note"}
             </h2>
 
-            <form onSubmit={handleSubmitCreate} noValidate>
+            <form onSubmit={handleSubmitCreate}>
               <input
-                type="text"
-                autoFocus
                 value={createTitle}
-                onChange={(e) => {
-                  setCreateTitle(e.target.value);
-                  setCreateTitleError("");
-                }}
-                className="w-full border border-stone-200 rounded-xl px-4 py-3 mb-2 text-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:border-stone-400 bg-stone-50/50"
+                onChange={(e) => setCreateTitle(e.target.value)}
+                className="w-full border p-2 mb-2"
                 placeholder="Title"
               />
 
-              <p className="text-xs text-stone-500 mb-4 px-1">
-                {createTitle.length} / {TITLE_MAX_LENGTH} characters
-              </p>
-
               {createTitleError && (
-                <p className="text-sm text-red-600 mb-4 px-1">
+                <p className="text-red-600 text-sm mb-2">
                   {createTitleError}
                 </p>
               )}
@@ -389,87 +270,26 @@ export default function NotesPage() {
               <textarea
                 value={createContent}
                 onChange={(e) => setCreateContent(e.target.value)}
-                className="w-full border border-stone-200 rounded-xl px-4 py-3 mb-8 min-h-[150px] text-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:border-stone-400 bg-stone-50/50 resize-y"
+                className="w-full border p-2 mb-4"
                 placeholder="Content (optional)"
               />
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-stone-100">
+              <div className="flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowCreateModal(false);
-                    createButtonRef.current?.focus();
-                  }}
-                  className="px-6 py-2.5 rounded-full border border-stone-200 text-stone-700 hover:bg-stone-50 font-medium transition-colors"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 border rounded"
                 >
                   Cancel
                 </button>
-
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-full bg-[#18181b] hover:bg-[#27272a] text-white font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={isSubmitting || createTitle.trim().length === 0}
+                  className="px-4 py-2 bg-blue-600 text-white rounded"
                 >
-                  {isSubmitting
-                    ? "Saving..."
-                    : editingNoteId !== null
-                      ? "Update note"
-                      : "Create note"}
+                  Save
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {noteToDelete && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="delete-note-title"
-          className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-        >
-          <div className="bg-white p-8 rounded-3xl w-full max-w-sm shadow-2xl border border-stone-200">
-            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-6">
-               <span className="material-icons-outlined text-xl">warning</span>
-            </div>
-
-            <h2
-              id="delete-note-title"
-              className="font-display text-2xl font-bold mb-2 text-stone-900"
-            >
-              Delete note
-            </h2>
-
-            <p className="text-stone-600 mb-8 leading-relaxed">
-              Are you sure you want to delete this note?
-              <br />
-              <strong className="text-stone-900">This action cannot be undone.</strong>
-            </p>
-
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setNoteToDelete(null)}
-                className="px-6 py-2.5 rounded-full border border-stone-200 text-stone-700 hover:bg-stone-50 font-medium transition-colors"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setNotes((prev) =>
-                    prev.filter((n) => n.id !== noteToDelete.id)
-                  );
-                  setNoteToDelete(null);
-                }}
-                className="px-6 py-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium transition-colors"
-              >
-                Delete
-              </button>
-            </div>
           </div>
         </div>
       )}
