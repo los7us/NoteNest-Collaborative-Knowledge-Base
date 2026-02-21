@@ -81,12 +81,23 @@ class ApiService {
 
   private async request(endpoint: string, options: RequestInit = {}): Promise<any> {
     const url = `${API_BASE_URL}${endpoint}`;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (typeof window !== 'undefined') {
+      const storedToken = localStorage.getItem('token');
+      if (storedToken) {
+        headers['Authorization'] = `Bearer ${storedToken}`;
+      }
+    }
+
     const config: RequestInit = {
+      ...options,
       headers: {
-        'Content-Type': 'application/json',
+        ...headers,
         ...options.headers,
       },
-      ...options,
     };
 
     const response = await fetch(url, config);
@@ -128,6 +139,34 @@ class ApiService {
     return this.request(`/api/workspaces/${workspaceId}/members/${userId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
+    });
+  }
+
+  async getInvites(workspaceId: string): Promise<any[]> {
+    return this.request(`/api/workspaces/${workspaceId}/invites`);
+  }
+
+  async createInvite(workspaceId: string, email: string, role: string): Promise<any> {
+    return this.request(`/api/workspaces/${workspaceId}/invites`, {
+      method: 'POST',
+      body: JSON.stringify({ email, role }),
+    });
+  }
+
+  async revokeInvite(workspaceId: string, inviteId: string): Promise<void> {
+    return this.request(`/api/workspaces/${workspaceId}/invites/${inviteId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getInviteDetails(token: string): Promise<any> {
+    return this.request(`/api/workspaces/invites/${token}`);
+  }
+
+  async acceptInvite(token: string): Promise<any> {
+    return this.request('/api/workspaces/accept-invite', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
     });
   }
 

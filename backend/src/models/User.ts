@@ -4,7 +4,7 @@ export interface IUser extends Document {
   email: string;
   password: string;
   name: string;
-  role: 'admin' | 'editor' | 'viewer'; // kept for backward compatibility, but will deprecate
+  role: 'admin' | 'editor' | 'commenter' | 'viewer'; // kept for backward compatibility, but will deprecate
   workspaces: string[]; // workspace IDs
   groups: string[]; // group IDs for hierarchical RBAC
   createdAt: Date;
@@ -14,7 +14,7 @@ const UserSchema: Schema = new Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   name: { type: String, required: true },
-  role: { type: String, enum: ['admin', 'editor', 'viewer'], default: 'viewer' },
+  role: { type: String, enum: ['admin', 'editor', 'commenter', 'viewer'], default: 'viewer' },
   workspaces: [{ type: String }],
   createdAt: { type: Date, default: Date.now },
 });

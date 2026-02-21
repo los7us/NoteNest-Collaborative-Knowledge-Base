@@ -62,9 +62,13 @@ export const resolvePermissions = async (userId: string, resourcePath: string): 
 
   const permissions: string[] = [];
 
+  // Generate parent paths for inheritance check (e.g., "w1/f1/n1" -> ["w1", "w1/f1", "w1/f1/n1"])
+  const pathSegments = resourcePath.split('/');
+  const prefixPaths = pathSegments.map((_, i) => pathSegments.slice(0, i + 1).join('/'));
+
   // Check workspace membership permissions for workspace-related resources
-  if (resourcePath.includes('/')) {
-    const workspaceId = resourcePath.split('/')[0];
+  const workspaceId = pathSegments[0];
+  if (workspaceId) {
     try {
       const workspace = await require('../models/Workspace').default.findById(workspaceId);
       if (workspace) {
@@ -77,6 +81,9 @@ export const resolvePermissions = async (userId: string, resourcePath: string): 
               break;
             case 'editor':
               permissions.push('read', 'write');
+              break;
+            case 'commenter':
+              permissions.push('read', 'comment');
               break;
             case 'viewer':
             default:
@@ -91,11 +98,10 @@ export const resolvePermissions = async (userId: string, resourcePath: string): 
   }
 
   // Get direct user permissions
-  const escapedResourcePath = escapeRegExp(resourcePath);
   const userPerms = await Permission.find({
     subjectId: userId,
     subjectType: 'user',
-    resourcePath: { $regex: `^${escapedResourcePath}` }, // prefix match for inheritance
+    resourcePath: { $in: prefixPaths },
     $or: [{ expiresAt: { $exists: false } }, { expiresAt: { $gt: new Date() } }]
   });
 
@@ -103,16 +109,14 @@ export const resolvePermissions = async (userId: string, resourcePath: string): 
 
   // Get permissions from user's groups
   const user = await User.findById(userId);
-  if (user && user.groups) {
-    for (const groupId of user.groups) {
-      const groupPerms = await Permission.find({
-        subjectId: groupId,
-        subjectType: 'group',
-        resourcePath: { $regex: `^${escapedResourcePath}` },
-        $or: [{ expiresAt: { $exists: false } }, { expiresAt: { $gt: new Date() } }]
-      });
-      groupPerms.forEach(perm => permissions.push(...perm.permissions));
-    }
+  if (user && user.groups && user.groups.length > 0) {
+    const groupPerms = await Permission.find({
+      subjectId: { $in: user.groups },
+      subjectType: 'group',
+      resourcePath: { $in: prefixPaths },
+      $or: [{ expiresAt: { $exists: false } }, { expiresAt: { $gt: new Date() } }]
+    });
+    groupPerms.forEach(perm => permissions.push(...perm.permissions));
   }
 
   // Remove duplicates

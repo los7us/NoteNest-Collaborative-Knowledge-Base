@@ -7,6 +7,14 @@ import { useUserRole } from "@/contexts/UserRoleContext";
 import { apiService } from "@/lib/api";
 
 const iconClass = "shrink-0";
+function UserIcon({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg className={className ?? iconClass} style={style} width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
 function MailIcon({ className, style }: { className?: string; style?: React.CSSProperties }) {
   return (
     <svg className={className ?? iconClass} style={style} width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -48,21 +56,27 @@ function Loader2Icon({ className, style }: { className?: string; style?: React.C
   );
 }
 
-export default function LoginPage() {
+export default function SignupPage() {
   const { login } = useUserRole();
   const router = useRouter();
 
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [errors, setErrors] = useState<{ email?: string; password?: string; general?: string }>({});
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [errors, setErrors] = useState<{ name?: string; email?: string; password?: string; confirmPassword?: string; general?: string }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const validateForm = () => {
-    const newErrors: { email?: string; password?: string } = {};
+    const newErrors: { name?: string; email?: string; password?: string; confirmPassword?: string } = {};
+    if (!name.trim()) newErrors.name = "Name is required";
     if (!email) newErrors.email = "Email is required";
     else if (!/\S+@\S+\.\S+/.test(email)) newErrors.email = "Please enter a valid email address";
     if (!password) newErrors.password = "Password is required";
     else if (password.length < 6) newErrors.password = "Password must be at least 6 characters";
+    if (!confirmPassword) newErrors.confirmPassword = "Confirm Password is required";
+    else if (password !== confirmPassword) newErrors.confirmPassword = "Passwords do not match";
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -75,17 +89,22 @@ export default function LoginPage() {
     setErrors({});
 
     try {
-      const response = await apiService.login(email, password);
-      login("editor"); // Fallback role for now, in a real app backend gives roles or abilities
-      localStorage.setItem('token', response.token);
+      // 1. Register the user
+      await apiService.register(email, password, name);
+      
+      // 2. Automatically log them in
+      const loginResponse = await apiService.login(email, password);
+      
+      localStorage.setItem('token', loginResponse.token);
+      login("editor"); // default role, could be pulled from user info or actual backend logic
+      
       router.push("/dashboard");
     } catch (error: any) {
-      console.error("Login failed:", error);
-      setErrors({ general: error.message || "Invalid email or password. Please try again." });
+      console.error("Signup failed:", error);
+      setErrors({ general: error.message || "Something went wrong during signup." });
       setIsSubmitting(false);
     }
   };
-
 
   return (
     <div
@@ -140,10 +159,10 @@ export default function LoginPage() {
           }}
         >
           <h2 className="text-2xl font-semibold text-center m-0 mb-2" style={{ color: "var(--color-text-primary)" }}>
-            Welcome back
+            Create an account
           </h2>
           <p className="text-base text-center mb-8" style={{ color: "var(--color-text-secondary)" }}>
-            Sign in to your account to continue
+            Sign up to get started
           </p>
 
           {errors.general && (
@@ -161,6 +180,35 @@ export default function LoginPage() {
           )}
 
           <form onSubmit={handleSubmit}>
+            <div className="mb-6">
+              <label htmlFor="name" className="block text-base font-medium mb-2.5" style={{ color: "var(--color-text-primary)" }}>
+                Name
+              </label>
+              <div className="relative">
+                <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0" style={{ color: "var(--color-text-muted)" }} />
+                <input
+                  id="name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => { setName(e.target.value); if (errors.name) setErrors({ ...errors, name: undefined }); }}
+                  placeholder="John Doe"
+                  className="login-input w-full rounded-xl border pl-12 pr-5 py-3.5 text-base outline-none box-border transition-colors focus:ring-2 focus:ring-offset-1 focus:ring-[var(--color-info)]"
+                  style={{
+                    borderColor: errors.name ? "var(--color-error)" : "var(--color-border-light)",
+                    color: "var(--color-text-primary)",
+                  }}
+                  aria-invalid={!!errors.name}
+                  aria-describedby={errors.name ? "name-error" : undefined}
+                />
+              </div>
+              {errors.name && (
+                <p id="name-error" className="flex items-center gap-2 mt-2 text-sm" style={{ color: "var(--color-error)" }}>
+                  <AlertCircleIcon style={{ width: 16, height: 16 }} />
+                  {errors.name}
+                </p>
+              )}
+            </div>
+
             <div className="mb-6">
               <label htmlFor="email" className="block text-base font-medium mb-2.5" style={{ color: "var(--color-text-primary)" }}>
                 Email
@@ -191,14 +239,9 @@ export default function LoginPage() {
             </div>
 
             <div className="mb-6">
-              <div className="flex items-center justify-between mb-2.5">
-                <label htmlFor="password" className="text-base font-medium" style={{ color: "var(--color-text-primary)" }}>
-                  Password
-                </label>
-                <Link href="/forgot-password" className="text-sm font-medium hover:opacity-90" style={{ color: "var(--color-info)" }}>
-                  Forgot password?
-                </Link>
-              </div>
+              <label htmlFor="password" className="block text-base font-medium mb-2.5" style={{ color: "var(--color-text-primary)" }}>
+                Password
+              </label>
               <div className="relative">
                 <LockIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0" style={{ color: "var(--color-text-muted)" }} />
                 <input
@@ -206,7 +249,7 @@ export default function LoginPage() {
                   type="password"
                   value={password}
                   onChange={(e) => { setPassword(e.target.value); if (errors.password) setErrors({ ...errors, password: undefined }); }}
-                  placeholder="Enter your password"
+                  placeholder="Create a password"
                   className="login-input w-full rounded-xl border pl-12 pr-5 py-3.5 text-base outline-none box-border transition-colors focus:ring-2 focus:ring-offset-1 focus:ring-[var(--color-info)]"
                   style={{
                     borderColor: errors.password ? "var(--color-error)" : "var(--color-border-light)",
@@ -224,6 +267,35 @@ export default function LoginPage() {
               )}
             </div>
 
+            <div className="mb-6">
+              <label htmlFor="confirmPassword" className="block text-base font-medium mb-2.5" style={{ color: "var(--color-text-primary)" }}>
+                Confirm Password
+              </label>
+              <div className="relative">
+                <LockIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0" style={{ color: "var(--color-text-muted)" }} />
+                <input
+                  id="confirmPassword"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => { setConfirmPassword(e.target.value); if (errors.confirmPassword) setErrors({ ...errors, confirmPassword: undefined }); }}
+                  placeholder="Confirm your password"
+                  className="login-input w-full rounded-xl border pl-12 pr-5 py-3.5 text-base outline-none box-border transition-colors focus:ring-2 focus:ring-offset-1 focus:ring-[var(--color-info)]"
+                  style={{
+                    borderColor: errors.confirmPassword ? "var(--color-error)" : "var(--color-border-light)",
+                    color: "var(--color-text-primary)",
+                  }}
+                  aria-invalid={!!errors.confirmPassword}
+                  aria-describedby={errors.confirmPassword ? "confirmPassword-error" : undefined}
+                />
+              </div>
+              {errors.confirmPassword && (
+                <p id="confirmPassword-error" className="flex items-center gap-2 mt-2 text-sm" style={{ color: "var(--color-error)" }}>
+                  <AlertCircleIcon style={{ width: 16, height: 16 }} />
+                  {errors.confirmPassword}
+                </p>
+              )}
+            </div>
+
             <button
               type="submit"
               disabled={isSubmitting}
@@ -235,41 +307,18 @@ export default function LoginPage() {
               aria-busy={isSubmitting}
             >
               {isSubmitting ? (
-                <><Loader2Icon style={{ width: 20, height: 20, animation: "spin 1s linear infinite" }} />Signing in...</>
+                <><Loader2Icon style={{ width: 20, height: 20, animation: "spin 1s linear infinite" }} />Signing up...</>
               ) : (
-                <>Sign in<ArrowRightIcon style={{ width: 20, height: 20 }} /></>
+                <>Sign up<ArrowRightIcon style={{ width: 20, height: 20 }} /></>
               )}
             </button>
           </form>
 
-          <div className="relative my-8">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t" style={{ borderColor: "var(--color-border-light)" }} /></div>
-            <div className="relative flex justify-center text-sm"><span className="px-4" style={{ backgroundColor: "var(--color-background)", color: "var(--color-text-muted)" }}>or continue with</span></div>
-          </div>
-
-          <button
-            type="button"
-            className="login-google-btn w-full rounded-xl border-2 py-4 px-5 text-base font-medium flex items-center justify-center gap-2.5 transition-colors hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--color-info)]"
-            style={{
-              borderColor: "var(--color-border-light)",
-              color: "var(--color-text-primary)",
-              backgroundColor: "var(--color-background)",
-            }}
-          >
-            <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" aria-hidden>
-              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
-              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-            </svg>
-            <span>Continue with Google</span>
-          </button>
+          <p className="mt-8 text-center text-base" style={{ color: "var(--color-text-secondary)" }}>
+            Already have an account?{" "}
+            <Link href="/login" className="font-medium hover:opacity-90 no-underline" style={{ color: "var(--color-info)" }}>Sign in</Link>
+          </p>
         </div>
-
-        <p className="mt-8 text-center text-base" style={{ color: "var(--color-text-secondary)" }}>
-          Don&apos;t have an account?{" "}
-          <Link href="/signup" className="font-medium hover:opacity-90 no-underline" style={{ color: "var(--color-info)" }}>Sign up</Link>
-        </p>
       </div>
 
       <style>{`
@@ -287,13 +336,9 @@ export default function LoginPage() {
           .login-input { background: var(--color-gray-900) !important; }
           .login-input::placeholder { color: var(--color-gray-500); }
         }
-        /* Card and Google button: subtle elevation in dark so borders read clearly */
+        /* Card: subtle elevation in dark so borders read clearly */
         @media (prefers-color-scheme: dark) {
           .login-card { box-shadow: 0 8px 40px -8px rgba(0,0,0,0.4), 0 2px 8px 0 rgba(0,0,0,0.2); }
-          .login-google-btn:hover { background: var(--color-gray-800) !important; border-color: var(--color-border-medium); }
-        }
-        @media (prefers-color-scheme: light) {
-          .login-google-btn:hover { background: var(--color-gray-50) !important; }
         }
       `}</style>
     </div>

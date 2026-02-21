@@ -4,7 +4,7 @@ export interface IWorkspace extends Document {
   name: string;
   description?: string;
   owner: string; // user ID
-  members: { userId: string; role: 'admin' | 'editor' | 'viewer' }[];
+  members: { userId: string; role: 'admin' | 'editor' | 'commenter' | 'viewer' }[];
   createdAt: Date;
 }
 
@@ -14,7 +14,7 @@ const WorkspaceSchema: Schema = new Schema({
   owner: { type: String, required: true },
   members: [{
     userId: { type: String, required: true },
-    role: { type: String, enum: ['admin', 'editor', 'viewer'], required: true }
+    role: { type: String, enum: ['admin', 'editor', 'commenter', 'viewer'], required: true }
   }],
   createdAt: { type: Date, default: Date.now },
 });

@@ -5,9 +5,12 @@ import { PersistenceManager } from './persistence';
 import Workspace from './models/Workspace';
 import Note from './models/Note';
 
+import { resolvePermissions } from './middleware/auth';
+
 interface AuthenticatedSocket extends Socket {
   userId?: string;
   workspaceId?: string;
+  permissions?: string[];
 }
 
 export class YjsProvider {
@@ -28,11 +31,12 @@ export class YjsProvider {
         const { noteId, workspaceId } = data;
 
         // Validate access
-        const workspace = await Workspace.findById(workspaceId);
-        if (!workspace || !workspace.members.some(m => m.userId === socket.userId!)) {
+        const perms = await resolvePermissions(socket.userId!, `${workspaceId}/${noteId}`);
+        if (!perms.includes('read')) {
           socket.emit('error', { message: 'Access denied' });
           return;
         }
+        socket.permissions = perms;
 
         const note = await Note.findOne({ _id: noteId, workspaceId });
         if (!note) {
@@ -73,6 +77,11 @@ export class YjsProvider {
       socket.on('yjs-update', async (updateData: { noteId: string; update: Uint8Array }) => {
         const { noteId, update } = updateData;
         if (!socket.rooms.has(`note-${noteId}`)) return;
+
+        if (!socket.permissions?.includes('write')) {
+          socket.emit('error', { message: 'Insufficient permissions to edit' });
+          return;
+        }
 
         const doc = this.docs.get(noteId);
         if (doc) {

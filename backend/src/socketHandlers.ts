@@ -9,9 +9,12 @@ import User from "./models/User";
 import { AuditService } from "./services/auditService";
 import { YjsProvider } from "./yjsProvider";
 
+import { resolvePermissions } from "./middleware/auth";
+
 interface AuthenticatedSocket extends Socket {
   userId?: string;
   workspaceId?: string;
+  permissions?: string[];
 }
 
 const activeUsers: Map<string, Set<string>> = new Map(); // noteId -> Set of userIds
@@ -43,11 +46,12 @@ export default function setupSocketHandlers(io: SocketIOServer) { // Setup socke
       const { noteId, workspaceId } = data;
 
       // Validate access
-      const workspace = await Workspace.findById(workspaceId);
-      if (!workspace || !workspace.members.some(m => m.userId === socket.userId!)) {
+      const perms = await resolvePermissions(socket.userId!, `${workspaceId}/${noteId}`);
+      if (!perms.includes('read')) {
         socket.emit("error", { message: "Access denied" });
         return;
       }
+      socket.permissions = perms;
 
       const note = await Note.findOne({ _id: noteId, workspaceId });
       if (!note) {
@@ -72,6 +76,11 @@ export default function setupSocketHandlers(io: SocketIOServer) { // Setup socke
       const note = await Note.findOne({ _id: noteId, workspaceId: socket.workspaceId }) as any;
       if (!note) {
         socket.emit("error", { message: "Note not found" });
+        return;
+      }
+
+      if (!socket.permissions?.includes('write')) {
+        socket.emit("error", { message: "Insufficient permissions to edit note" });
         return;
       }
 

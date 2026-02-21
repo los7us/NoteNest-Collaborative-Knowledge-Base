@@ -54,6 +54,7 @@ export function UserRoleProvider({ children }: { children: React.ReactNode }) {
     try {
       localStorage.setItem(STORAGE_KEY_ROLE, newRole);
       localStorage.setItem(STORAGE_KEY_AUTH, "true");
+      // Actually, token is saved in login.tsx, but we can keep this clean.
     } catch {
       // ignore
     }
@@ -65,6 +66,7 @@ export function UserRoleProvider({ children }: { children: React.ReactNode }) {
     try {
       localStorage.removeItem(STORAGE_KEY_ROLE);
       localStorage.removeItem(STORAGE_KEY_AUTH);
+      localStorage.removeItem('token');
     } catch {
       // ignore
     }

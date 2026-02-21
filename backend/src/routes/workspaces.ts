@@ -1,5 +1,8 @@
 import express, { Request, Response } from 'express';
+import crypto from 'crypto';
 import Workspace from '../models/Workspace';
+import WorkspaceInvite from '../models/WorkspaceInvite';
+import User from '../models/User';
 import { AuditService } from '../services/auditService';
 import { authenticateToken, AuthRequest, requirePermission } from '../middleware/auth';
 import { getCacheService, CacheKeys } from '../services/cacheService';
@@ -7,6 +10,67 @@ import { getEventBus } from '../services/eventBus';
 import { EVENT_NAMES, WorkspaceCreatedEvent, MemberAddedToWorkspaceEvent, MemberRemovedFromWorkspaceEvent, MemberRoleUpdatedEvent } from '../types/events';
 
 const router = express.Router();
+
+// Get invite by token (Public)
+router.get('/invites/:token', async (req: Request, res: Response) => {
+  try {
+    const invite = await WorkspaceInvite.findOne({ token: req.params.token, status: 'pending' });
+    if (!invite) {
+      return res.status(404).json({ error: 'Invite not found or already used' });
+    }
+    if (new Date() > invite.expiresAt) {
+      return res.status(400).json({ error: 'Invite has expired' });
+    }
+
+    const workspace = await Workspace.findById(invite.workspaceId);
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    res.json({
+      workspaceName: workspace.name,
+      email: invite.email,
+      role: invite.role,
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch invite details' });
+  }
+});
+
+// Accept an invite
+router.post('/accept-invite', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { token } = req.body;
+    const invite = await WorkspaceInvite.findOne({ token, status: 'pending' });
+    if (!invite) {
+      return res.status(404).json({ error: 'Invite not found or already used' });
+    }
+    if (new Date() > invite.expiresAt) {
+      return res.status(400).json({ error: 'Invite has expired' });
+    }
+
+    const workspace = await Workspace.findById(invite.workspaceId);
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    // Check if user is already a member
+    const existingMember = workspace.members.find(m => m.userId === req.user!._id.toString());
+    if (existingMember) {
+      return res.status(400).json({ error: 'User is already a member' });
+    }
+
+    workspace.members.push({ userId: req.user!._id.toString(), role: invite.role as 'admin' | 'editor' | 'commenter' | 'viewer' });
+    await workspace.save();
+
+    invite.status = 'accepted';
+    await invite.save();
+
+    res.json(workspace);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to accept invite' });
+  }
+});
 
 // Get workspaces for a user
 router.get('/user/:userId', authenticateToken, async (req: Request, res: Response) => {
@@ -222,6 +286,96 @@ router.get('/:id/audit-logs', authenticateToken, async (req: AuthRequest, res: R
     res.json(logs);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch audit logs' });
+  }
+});
+
+// Get pending invites for workspace
+router.get('/:id/invites', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const workspace = await Workspace.findById(req.params.id);
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    // Check permissions: owner or admin
+    const isOwner = workspace.owner === req.user!._id.toString();
+    const member = workspace.members.find(m => m.userId === req.user!._id.toString());
+    const isAdmin = member?.role === 'admin';
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const invites = await WorkspaceInvite.find({ workspaceId: req.params.id, status: 'pending' });
+    res.json(invites);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch invites' });
+  }
+});
+
+// Create an invite for workspace
+router.post('/:id/invites', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { email, role } = req.body;
+    const workspace = await Workspace.findById(req.params.id);
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    // Check permissions: owner or admin
+    const isOwner = workspace.owner === req.user!._id.toString();
+    const member = workspace.members.find(m => m.userId === req.user!._id.toString());
+    const isAdmin = member?.role === 'admin';
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiration
+
+    const invite = new WorkspaceInvite({
+      workspaceId: req.params.id,
+      email,
+      role,
+      token,
+      inviterId: req.user!._id.toString(),
+      expiresAt,
+    });
+    await invite.save();
+
+    res.status(201).json(invite);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to create invite' });
+  }
+});
+
+// Revoke an invite
+router.delete('/:id/invites/:inviteId', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const workspace = await Workspace.findById(req.params.id);
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    // Check permissions: owner or admin
+    const isOwner = workspace.owner === req.user!._id.toString();
+    const member = workspace.members.find(m => m.userId === req.user!._id.toString());
+    const isAdmin = member?.role === 'admin';
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const invite = await WorkspaceInvite.findOne({ _id: req.params.inviteId, workspaceId: req.params.id });
+    if (!invite) {
+      return res.status(404).json({ error: 'Invite not found' });
+    }
+
+    invite.status = 'revoked';
+    await invite.save();
+
+    res.json({ message: 'Invite revoked' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to revoke invite' });
   }
 });
 
