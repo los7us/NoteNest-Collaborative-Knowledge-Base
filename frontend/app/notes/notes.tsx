@@ -11,6 +11,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 const STORAGE_KEY = "notenest-notes";
 const DRAFT_KEY = "notenest-note-draft";
 const TITLE_MAX_LENGTH = 200;
+const PINNED_KEY = "notenest-pinned-notes";
 
 interface Note {
   id: number;
@@ -55,6 +56,7 @@ export default function NotesPage() {
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [pinnedNoteIds, setPinnedNoteIds] = useState<number[]>([]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] =
@@ -66,6 +68,8 @@ export default function NotesPage() {
   const [createTitleError, setCreateTitleError] = useState("");
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedNoteIds, setSelectedNoteIds] = useState<number[]>([]);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
 
   /* ---------- Undo delete ---------- */
   const [recentlyDeleted, setRecentlyDeleted] = useState<Note | null>(null);
@@ -78,9 +82,16 @@ export default function NotesPage() {
   useEffect(() => {
     const stored = loadNotesFromStorage();
     setNotes(stored);
+
+    const rawPinned = localStorage.getItem(PINNED_KEY);
+    if (rawPinned) {
+      try {
+        setPinnedNoteIds(JSON.parse(rawPinned));
+      } catch { }
+    }
+
     setIsLoading(false);
   }, []);
-
   /* ---------- Sync search ---------- */
   useEffect(() => {
     setSearchQuery(search);
@@ -89,7 +100,11 @@ export default function NotesPage() {
   /* ---------- Persist notes ---------- */
   useEffect(() => {
     if (!isLoading) saveNotesToStorage(notes);
-  }, [notes, isLoading]);
+  }, [notes, isLoading])
+
+  useEffect(() => {
+    localStorage.setItem(PINNED_KEY, JSON.stringify(pinnedNoteIds));
+  }, [pinnedNoteIds]);
 
   /* ---------- Restore draft ---------- */
   useEffect(() => {
@@ -102,7 +117,7 @@ export default function NotesPage() {
       const draft = JSON.parse(raw);
       setCreateTitle(draft.title || "");
       setCreateContent(draft.content || "");
-    } catch {}
+    } catch { }
   }, [showCreateModal]);
 
   /* ---------- Autosave draft ---------- */
@@ -126,11 +141,16 @@ export default function NotesPage() {
   });
 
   const sortedNotes = [...filteredNotes].sort((a, b) => {
+    const aPinned = pinnedNoteIds.includes(a.id);
+    const bPinned = pinnedNoteIds.includes(b.id);
+
+    if (aPinned && !bPinned) return -1;
+    if (!aPinned && bPinned) return 1;
+
     if (sortBy === "newest") return b.createdAt - a.createdAt;
     if (sortBy === "oldest") return a.createdAt - b.createdAt;
     return a.title.localeCompare(b.title);
   });
-
   /* ---------- Create ---------- */
   const handleCreateNote = () => {
     if (!canCreateNote) return;
@@ -171,19 +191,19 @@ export default function NotesPage() {
     setNotes((prev) =>
       editingNoteId
         ? prev.map((n) =>
-            n.id === editingNoteId
-              ? { ...n, title, content: createContent || undefined }
-              : n
-          )
+          n.id === editingNoteId
+            ? { ...n, title, content: createContent || undefined }
+            : n
+        )
         : [
-            ...prev,
-            {
-              id: Date.now(),
-              title,
-              content: createContent || undefined,
-              createdAt: Date.now(),
-            },
-          ]
+          ...prev,
+          {
+            id: Date.now(),
+            title,
+            content: createContent || undefined,
+            createdAt: Date.now(),
+          },
+        ]
     );
 
     setShowCreateModal(false);
@@ -208,6 +228,49 @@ export default function NotesPage() {
       setRecentlyDeleted(null);
       setShowUndoToast(false);
     }, 5000);
+  };
+
+  /* ---------- Bulk select ---------- */
+  const toggleSelectNote = (id: number) => {
+    setSelectedNoteIds((prev) =>
+      prev.includes(id)
+        ? prev.filter((n) => n !== id)
+        : [...prev, id]
+    );
+  };
+
+  const toggleSelectionMode = () => {
+  setIsSelectionMode((prev) => {
+    if (prev) {
+      setSelectedNoteIds([]); // clear selections when exiting
+    }
+    return !prev;
+  });
+};
+
+  /* ---------- Delete with undo ---------- */
+  const handleBulkDelete = () => {
+    if (!selectedNoteIds.length) return;
+
+    if (!confirm(`Delete ${selectedNoteIds.length} notes?`)) return;
+
+    setNotes((prev) =>
+      prev.filter((n) => !selectedNoteIds.includes(n.id))
+    );
+
+    setPinnedNoteIds((prev) =>
+      prev.filter((id) => !selectedNoteIds.includes(id))
+    );
+
+    setSelectedNoteIds([]);
+  };
+
+  const togglePin = (noteId: number) => {
+    setPinnedNoteIds((prev) =>
+      prev.includes(noteId)
+        ? prev.filter((id) => id !== noteId)
+        : [...prev, noteId]
+    );
   };
 
   /* ============================= */
@@ -237,19 +300,40 @@ export default function NotesPage() {
           <main className="flex-1 overflow-y-auto">
             <div className="max-w-3xl mx-auto p-6">
               <div className="mb-4 flex justify-end gap-2">
-                <span className="text-sm text-gray-500">Sort by</span>
-                <select
-                  value={sortBy}
-                  onChange={(e) =>
-                    setSortBy(e.target.value as any)
-                  }
-                  className="border rounded px-3 py-2"
-                >
-                  <option value="newest">Newest first</option>
-                  <option value="oldest">Oldest first</option>
-                  <option value="az">A–Z</option>
-                </select>
-              </div>
+  {!isViewer && (
+ <button
+  onClick={toggleSelectionMode}
+  title={
+    isSelectionMode
+      ? "Exit selection mode"
+      : "Select multiple notes to delete at once"
+  }
+  className="border px-4 py-2 rounded"
+>
+  {isSelectionMode ? "Cancel selection" : "Select notes"}
+</button>
+  )}
+
+  {!isViewer && isSelectionMode && selectedNoteIds.length > 0 && (
+    <button
+      onClick={handleBulkDelete}
+      className="mb-4 px-4 py-2 bg-red-600 text-white rounded"
+    >
+      Delete selected ({selectedNoteIds.length})
+    </button>
+  )}
+
+  <span className="text-sm text-gray-500">Sort by</span>
+  <select
+    value={sortBy}
+    onChange={(e) => setSortBy(e.target.value as any)}
+    className="border rounded px-3 py-2"
+  >
+    <option value="newest">Newest first</option>
+    <option value="oldest">Oldest first</option>
+    <option value="az">A–Z</option>
+  </select>
+</div>
 
               {isLoading ? (
                 <SkeletonList count={4} />
@@ -265,18 +349,35 @@ export default function NotesPage() {
                       key={note.id}
                       className="border rounded-xl p-4 bg-white flex justify-between"
                     >
-                      <div>
-                        <h4 className="font-semibold">{note.title}</h4>
-                        <p className="text-xs text-gray-500">
-                          {formatRelativeTime(note.createdAt)}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          {note.content || "No content"}
-                        </p>
+                      <div className="flex items-start gap-3">
+                       {!isViewer && isSelectionMode && (
+  <input
+    type="checkbox"
+    checked={selectedNoteIds.includes(note.id)}
+    onChange={() => toggleSelectNote(note.id)}
+    className="mt-1"
+  />
+)}
+
+                        <div>
+                          <h4 className="font-semibold">{note.title}</h4>
+                          <p className="text-xs text-gray-500">
+                            {formatRelativeTime(note.createdAt)}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {note.content || "No content"}
+                          </p>
+                        </div>
                       </div>
 
                       {!isViewer && (
                         <div className="flex gap-2">
+                          <button
+                            title={pinnedNoteIds.includes(note.id) ? "Unpin note" : "Pin note"}
+                            onClick={() => togglePin(note.id)}
+                          >
+                            {pinnedNoteIds.includes(note.id) ? "📌" : "📍"}
+                          </button>
                           <button
                             title="Edit note"
                             onClick={() => handleEditNote(note)}
