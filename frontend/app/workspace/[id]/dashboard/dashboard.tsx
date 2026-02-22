@@ -22,6 +22,8 @@ export default function WorkspaceDashboardPage({ workspaceId }: { workspaceId: s
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activityPanelOpen, setActivityPanelOpen] = useState(false);
+  const [totalNotes, setTotalNotes] = useState(0);
+const [pinnedNotes, setPinnedNotes] = useState(0);
 
   const workspace = workspaces.find((w) => w.id === workspaceId);
 
@@ -44,6 +46,22 @@ export default function WorkspaceDashboardPage({ workspaceId }: { workspaceId: s
     }, 800);
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+  try {
+    const rawNotes = localStorage.getItem("notenest-notes");
+    const rawPinned = localStorage.getItem("notenest-pinned-notes");
+
+    const notes = rawNotes ? JSON.parse(rawNotes) : [];
+    const pinned = rawPinned ? JSON.parse(rawPinned) : [];
+
+    setTotalNotes(Array.isArray(notes) ? notes.length : 0);
+    setPinnedNotes(Array.isArray(pinned) ? pinned.length : 0);
+  } catch {
+    setTotalNotes(0);
+    setPinnedNotes(0);
+  }
+}, []);
 
   const retryLoad = () => {
     setLoadError(null);
@@ -129,6 +147,14 @@ export default function WorkspaceDashboardPage({ workspaceId }: { workspaceId: s
                 <p className="text-lg text-stone-600 max-w-2xl">
                   {workspace.description || "This is your workspace dashboard. Get started by creating your first note."}
                 </p>
+                <div className="mt-6 flex gap-6 text-sm text-stone-700">
+  <div>
+    <span className="font-semibold">{totalNotes}</span> total notes
+  </div>
+  <div>
+    <span className="font-semibold">{pinnedNotes}</span> pinned notes
+  </div>
+</div>
               </div>
             </section>
 
@@ -151,6 +177,22 @@ export default function WorkspaceDashboardPage({ workspaceId }: { workspaceId: s
                 className="mb-0"
               />
             )}
+            {!isLoading && totalNotes === 0 && (
+  <EmptyState
+    title="No notes yet"
+    description="Create your first note to start using your workspace."
+    action={
+      canCreateNote ? (
+        <Link
+          href={`/workspace/${workspaceId}/notes?new=1`}
+          className="btn-primary"
+        >
+          Create Note
+        </Link>
+      ) : undefined
+    }
+  />
+)}
 
             {/* Quick Actions — card */}
             <div>
